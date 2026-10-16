@@ -120,7 +120,7 @@ class PhotoViewCore extends StatefulWidget {
 
   final PhotoViewImageLongPressStartCallback? onLongPressStart;
   final GestureLongPressEndCallback? onLongPressEnd;
-  final GestureLongPressCancelCallback? onLongPressCancel;
+  final VoidCallback? onLongPressCancel;
 
   final HitTestBehavior? gestureDetectorBehavior;
   final bool tightMode;

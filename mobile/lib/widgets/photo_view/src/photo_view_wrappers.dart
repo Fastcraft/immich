@@ -73,7 +73,7 @@ class ImageWrapper extends StatefulWidget {
   final PhotoViewImageScaleEndCallback? onScaleEnd;
   final PhotoViewImageLongPressStartCallback? onLongPressStart;
   final GestureLongPressEndCallback? onLongPressEnd;
-  final GestureLongPressCancelCallback? onLongPressCancel;
+  final VoidCallback? onLongPressCancel;
   final Size outerSize;
   final HitTestBehavior? gestureDetectorBehavior;
   final bool? tightMode;
@@ -340,7 +340,7 @@ class CustomChildWrapper extends StatelessWidget {
   final PhotoViewImageScaleEndCallback? onScaleEnd;
   final PhotoViewImageLongPressStartCallback? onLongPressStart;
   final GestureLongPressEndCallback? onLongPressEnd;
-  final GestureLongPressCancelCallback? onLongPressCancel;
+  final VoidCallback? onLongPressCancel;
   final Size outerSize;
   final HitTestBehavior? gestureDetectorBehavior;
   final bool? tightMode;

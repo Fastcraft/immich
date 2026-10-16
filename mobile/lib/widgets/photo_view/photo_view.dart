@@ -450,7 +450,7 @@ class PhotoView extends StatefulWidget {
   final GestureLongPressEndCallback? onLongPressEnd;
 
   /// A callback when a long-press gesture has been canceled.
-  final GestureLongPressCancelCallback? onLongPressCancel;
+  final VoidCallback? onLongPressCancel;
 
   /// Whether double tap to zoom is enabled.
   final bool enableDoubleTapZoom;

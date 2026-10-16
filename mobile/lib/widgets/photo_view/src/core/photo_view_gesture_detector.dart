@@ -45,7 +45,7 @@ class PhotoViewGestureDetector extends StatelessWidget {
 
   final GestureLongPressStartCallback? onLongPressStart;
   final GestureLongPressEndCallback? onLongPressEnd;
-  final GestureLongPressCancelCallback? onLongPressCancel;
+  final VoidCallback? onLongPressCancel;
 
   final Widget? child;
 

@@ -471,7 +471,7 @@ class _AssetPageState extends ConsumerState<AssetPage> {
       enableDoubleTapZoom: false,
       onDoubleTapDown: _onVideoDoubleTapDown,
       onDoubleTap: () => _onVideoDoubleTap(asset),
-      onLongPressStart: (_) => _onVideoLongPressStart(asset),
+      onLongPressStart: (_, _, _) => _onVideoLongPressStart(asset),
       onLongPressEnd: (_) => _onVideoLongPressEnd(asset),
       onLongPressCancel: () => _onVideoLongPressCancel(asset),
       scaleStateChangedCallback: _onScaleStateChanged,
