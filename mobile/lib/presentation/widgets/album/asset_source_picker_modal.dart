@@ -180,7 +180,8 @@ Future<Set<BaseAsset>?> showAssetSourceSelectionSheet({
         );
       }
 
-      if (targetAlbum == null || !context.mounted) {
+      final selectedAlbum = targetAlbum;
+      if (selectedAlbum == null || !context.mounted) {
         return null;
       }
 
@@ -189,8 +190,8 @@ Future<Set<BaseAsset>?> showAssetSourceSelectionSheet({
           builder: (_) => AssetSelectionTimelinePage(
             lockedSelectionAssets: lockedAssets,
             source: AssetSelectionSource.localAlbum,
-            localAlbumId: targetAlbum.id,
-            title: targetAlbum.name,
+            localAlbumId: selectedAlbum.id,
+            title: selectedAlbum.name,
           ),
         ),
       );
