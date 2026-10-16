@@ -144,14 +144,14 @@ class _VideoPlaybackFeedbackState extends State<VideoPlaybackFeedback>
                   );
                 },
                 child: FractionallySizedBox(
-                  widthFactor: 0.45,
-                  heightFactor: 0.7,
+                  widthFactor: 0.5,
+                  heightFactor: 1.0,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.horizontal(
-                        left: isForward ? const Radius.elliptical(120, 240) : Radius.zero,
-                        right: isRewind ? const Radius.elliptical(120, 240) : Radius.zero,
+                        left: isForward ? const Radius.circular(500) : Radius.zero,
+                        right: isRewind ? const Radius.circular(500) : Radius.zero,
                       ),
                     ),
                     alignment: Alignment.center,

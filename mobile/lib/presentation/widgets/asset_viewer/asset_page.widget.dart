@@ -552,24 +552,29 @@ class _AssetPageState extends ConsumerState<AssetPage> {
                 SizedBox(
                   width: viewportWidth,
                   height: viewportHeight,
-                  child: _buildPhotoView(
-                    asset: displayAsset,
-                    heroAttributes: isCurrent
-                        ? PhotoViewHeroAttributes(tag: '${asset.heroTag}_${widget.heroOffset}')
-                        : null,
-                    isCurrent: isCurrent,
-                    isPlayingMotionVideo: isPlayingMotionVideo,
-                    localFilePath: viewIntentFilePath,
-                    remoteThumbnailSize: thumbnailSize,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildPhotoView(
+                        asset: displayAsset,
+                        heroAttributes: isCurrent
+                            ? PhotoViewHeroAttributes(tag: '${asset.heroTag}_${widget.heroOffset}')
+                            : null,
+                        isCurrent: isCurrent,
+                        isPlayingMotionVideo: isPlayingMotionVideo,
+                        localFilePath: viewIntentFilePath,
+                        remoteThumbnailSize: thumbnailSize,
+                      ),
+                      if (displayAsset.isVideo)
+                        Positioned.fill(
+                          child: VideoPlaybackFeedback(
+                            isFastForwarding: _isFastForwarding,
+                            controller: _feedbackController,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (displayAsset.isVideo)
-                  Positioned.fill(
-                    child: VideoPlaybackFeedback(
-                      isFastForwarding: _isFastForwarding,
-                      controller: _feedbackController,
-                    ),
-                  ),
                 if (showingOcr && displayAsset.width != null && displayAsset.height != null)
                   Positioned.fill(
                     child: OcrOverlay(

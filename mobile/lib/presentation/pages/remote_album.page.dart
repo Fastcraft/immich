@@ -9,6 +9,7 @@ import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/domain/models/server_capability.model.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
+import 'package:immich_mobile/presentation/widgets/album/asset_source_picker_modal.dart';
 import 'package:immich_mobile/presentation/widgets/album/pending_uploads_banner.widget.dart';
 import 'package:immich_mobile/presentation/widgets/bottom_sheet/remote_album_bottom_sheet.widget.dart';
 import 'package:immich_mobile/presentation/widgets/remote_album/album_option.widget.dart';
@@ -48,8 +49,10 @@ class _RemoteAlbumPageState extends ConsumerState<RemoteAlbumPage> {
       return;
     }
 
-    final newAssets = await context.pushRoute<Set<BaseAsset>>(
-      AssetSelectionTimelineRoute(lockedSelectionAssets: albumAssets.toSet()),
+    final newAssets = await showAssetSourceSelectionSheet(
+      context: context,
+      ref: ref,
+      lockedAssets: albumAssets.toSet(),
     );
 
     if (newAssets == null || newAssets.isEmpty) {

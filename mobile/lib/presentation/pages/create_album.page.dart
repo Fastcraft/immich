@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
+import 'package:immich_mobile/presentation/widgets/album/asset_source_picker_modal.dart';
 import 'package:immich_mobile/presentation/widgets/images/thumbnail.widget.dart';
 import 'package:immich_mobile/providers/infrastructure/album.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
@@ -14,7 +15,9 @@ import 'package:immich_mobile/widgets/common/immich_toast.dart';
 
 @RoutePage()
 class CreateAlbumPage extends ConsumerStatefulWidget {
-  const CreateAlbumPage({super.key});
+  final Set<BaseAsset>? initialAssets;
+
+  const CreateAlbumPage({super.key, this.initialAssets});
 
   @override
   ConsumerState<CreateAlbumPage> createState() => _CreateAlbumPageState();
@@ -32,6 +35,9 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialAssets != null) {
+      selectedAssets = widget.initialAssets!.toSet();
+    }
     albumTitleController.addListener(_onTitleChanged);
   }
 
@@ -152,8 +158,10 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
   }
 
   Future<void> onSelectPhotos() async {
-    final assets = await context.pushRoute<Set<BaseAsset>>(
-      AssetSelectionTimelineRoute(lockedSelectionAssets: selectedAssets),
+    final assets = await showAssetSourceSelectionSheet(
+      context: context,
+      ref: ref,
+      lockedAssets: selectedAssets,
     );
 
     if (assets == null || assets.isEmpty) {
