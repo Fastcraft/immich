@@ -82,6 +82,7 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
     WidgetsBinding.instance.removeObserver(this);
     _loadTimer?.cancel();
     _removeListeners();
+    _controller = null;
     super.dispose();
   }
 
@@ -280,7 +281,7 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
     }
 
     final source = await videoSource;
-    if (source == null || !mounted) {
+    if (source == null || !mounted || _controller != nc) {
       return;
     }
 
@@ -288,9 +289,19 @@ class NativeVideoViewerState extends ConsumerState<NativeVideoViewer> with Widge
     final loopVideo = widget.loopOverride ?? ref.read(appConfigProvider).viewer.loopVideo;
     final localNotifier = _notifier;
 
-    await localNotifier.load(source);
-    await localNotifier.setLoop(!widget.asset.isMotionPhoto && loopVideo);
-    await localNotifier.setVolume(1);
+    try {
+      await localNotifier.load(source);
+      if (!mounted || _controller != nc) {
+        return;
+      }
+      await localNotifier.setLoop(!widget.asset.isMotionPhoto && loopVideo);
+      if (!mounted || _controller != nc) {
+        return;
+      }
+      await localNotifier.setVolume(1);
+    } catch (e) {
+      _log.warning('Error during _loadVideo: $e');
+    }
   }
 
   void _initController(NativeVideoPlayerController nc) {

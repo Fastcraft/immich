@@ -323,13 +323,54 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     final screenWidth = context.width;
     final isLeftSide = pos.dx < screenWidth / 2;
 
+    final videoState = ref.read(videoPlayerProvider(asset.id));
+    final effectiveDuration = videoState.duration > Duration.zero ? videoState.duration : asset.duration;
+    final currentPosition = videoState.position;
+
+    // Guard against uninitialized or zero-length video
+    if (effectiveDuration <= Duration.zero) {
+      return;
+    }
+
     final notifier = ref.read(videoPlayerProvider(asset.id).notifier);
-    if (isLeftSide) {
-      notifier.seekRelative(const Duration(seconds: -10));
-      _feedbackController.triggerSkip(SkipDirection.rewind);
+    const tenSeconds = Duration(seconds: 10);
+    const startThreshold = Duration(milliseconds: 150);
+    const endMargin = Duration(milliseconds: 250);
+
+    if (effectiveDuration < tenSeconds) {
+      // For short videos (<10s), jump safely to beginning or near end without crashing
+      if (isLeftSide) {
+        if (currentPosition <= startThreshold) {
+          return;
+        }
+        final skipSeconds = (currentPosition.inMilliseconds / 1000).ceil().clamp(1, 10);
+        notifier.seekTo(Duration.zero);
+        _feedbackController.triggerSkip(SkipDirection.rewind, seconds: skipSeconds);
+      } else {
+        if (currentPosition >= effectiveDuration - endMargin) {
+          return;
+        }
+        final remaining = effectiveDuration - currentPosition;
+        final skipSeconds = (remaining.inMilliseconds / 1000).ceil().clamp(1, 10);
+        final safeEnd = effectiveDuration > endMargin ? effectiveDuration - endMargin : Duration.zero;
+        notifier.seekTo(safeEnd);
+        _feedbackController.triggerSkip(SkipDirection.forward, seconds: skipSeconds);
+      }
     } else {
-      notifier.seekRelative(const Duration(seconds: 10));
-      _feedbackController.triggerSkip(SkipDirection.forward);
+      // For regular videos (>=10s)
+      if (isLeftSide) {
+        if (currentPosition <= startThreshold) {
+          return;
+        }
+        notifier.seekRelative(-tenSeconds);
+        _feedbackController.triggerSkip(SkipDirection.rewind);
+      } else {
+        if (currentPosition >= effectiveDuration - endMargin) {
+          return;
+        }
+        notifier.seekRelative(tenSeconds);
+        _feedbackController.triggerSkip(SkipDirection.forward);
+      }
     }
     unawaited(HapticFeedback.lightImpact());
   }

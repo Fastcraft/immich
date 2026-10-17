@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 enum SkipDirection { rewind, forward }
 
 class VideoPlaybackFeedbackController {
-  void Function(SkipDirection direction)? _onSkip;
+  void Function(SkipDirection direction, {int? seconds})? _onSkip;
 
-  void triggerSkip(SkipDirection direction) {
-    _onSkip?.call(direction);
+  void triggerSkip(SkipDirection direction, {int? seconds}) {
+    _onSkip?.call(direction, seconds: seconds);
   }
 }
 
@@ -97,15 +97,16 @@ class _VideoPlaybackFeedbackState extends State<VideoPlaybackFeedback>
     super.dispose();
   }
 
-  void _handleSkip(SkipDirection direction) {
+  void _handleSkip(SkipDirection direction, {int? seconds}) {
     _dismissTimer?.cancel();
 
+    final step = seconds ?? 10;
     setState(() {
       if (_currentDirection == direction) {
-        _accumulatedSeconds += 10;
+        _accumulatedSeconds += step;
       } else {
         _currentDirection = direction;
-        _accumulatedSeconds = 10;
+        _accumulatedSeconds = step;
       }
     });
 

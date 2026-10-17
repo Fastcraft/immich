@@ -102,7 +102,11 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     }
 
     timer.cancel();
-    await _controller?.seekTo(state.position.inMilliseconds);
+    try {
+      await _controller?.seekTo(state.position.inMilliseconds);
+    } catch (e) {
+      _log.warning('Error flushing seek: $e');
+    }
   }
 
   void seekTo(Duration position) {
@@ -116,8 +120,12 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
       return;
     }
 
-    _seekTimer = Timer(const Duration(milliseconds: 150), () {
-      unawaited(_controller?.seekTo(state.position.inMilliseconds));
+    _seekTimer = Timer(const Duration(milliseconds: 150), () async {
+      try {
+        await _controller?.seekTo(state.position.inMilliseconds);
+      } catch (e) {
+        _log.warning('Error seeking video: $e');
+      }
     });
   }
 
@@ -165,7 +173,7 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     try {
       await _controller?.setVolume(volume);
     } catch (e) {
-      _log.severe('Error setting volume: $e');
+      _log.warning('Error setting volume: $e');
     }
   }
 
@@ -173,18 +181,20 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     try {
       await _controller?.setLoop(loop);
     } catch (e) {
-      _log.severe('Error setting loop: $e');
+      _log.warning('Error setting loop: $e');
     }
   }
 
   void seekRelative(Duration delta) {
-    if (_controller == null) {
+    if (_controller == null || state.duration <= Duration.zero) {
       return;
     }
 
-    final int maxMs = state.duration.inMilliseconds > 0 ? state.duration.inMilliseconds : double.maxFinite.toInt();
+    final int durationMs = state.duration.inMilliseconds;
+    // Leave a small 250ms margin before end of stream to prevent decoder crash / EOS channel disconnect
+    final int safeMaxMs = durationMs > 250 ? durationMs - 250 : durationMs;
     final int targetMs = (state.position + delta).inMilliseconds;
-    final int clampedMs = targetMs.clamp(0, maxMs);
+    final int clampedMs = targetMs.clamp(0, safeMaxMs);
     seekTo(Duration(milliseconds: clampedMs));
   }
 
@@ -192,7 +202,7 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     try {
       await _controller?.setPlaybackSpeed(speed);
     } catch (e) {
-      _log.severe('Error setting playback speed: $e');
+      _log.warning('Error setting playback speed: $e');
     }
   }
 
