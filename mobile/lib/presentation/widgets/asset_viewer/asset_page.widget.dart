@@ -607,7 +607,11 @@ class _AssetPageState extends ConsumerState<AssetPage> {
                         remoteThumbnailSize: thumbnailSize,
                       ),
                       if (displayAsset.isVideo)
-                        Positioned.fill(
+                        Positioned(
+                          top: (viewportHeight - imageHeight) / 2,
+                          left: 0,
+                          width: viewportWidth,
+                          height: imageHeight,
                           child: VideoPlaybackFeedback(
                             isFastForwarding: _isFastForwarding,
                             controller: _feedbackController,

@@ -193,9 +193,8 @@ class _VideoPlaybackFeedbackState extends State<VideoPlaybackFeedback>
           // 2.0x Fast Forward Badge (Shown at top center when long-pressing)
           Align(
             alignment: Alignment.topCenter,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 60.0),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16.0),
                 child: AnimatedOpacity(
                   opacity: widget.isFastForwarding ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 150),

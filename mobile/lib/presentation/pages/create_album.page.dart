@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
+import 'package:immich_mobile/presentation/pages/asset_selection_timeline.page.dart';
 import 'package:immich_mobile/presentation/widgets/album/asset_source_picker_modal.dart';
 import 'package:immich_mobile/presentation/widgets/images/thumbnail.widget.dart';
 import 'package:immich_mobile/providers/infrastructure/album.provider.dart';
@@ -104,22 +105,63 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
   Widget _buildSelectPhotosButton() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10.0))),
-          backgroundColor: context.colorScheme.surfaceContainerHigh,
-        ),
-        onPressed: onSelectPhotos,
-        icon: Icon(Icons.add_rounded, color: context.primaryColor),
-        label: Padding(
-          padding: const EdgeInsets.only(left: 8.0),
-          child: Text(
-            context.t.create_shared_album_page_share_select_photos,
-            style: context.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: context.primaryColor),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
+              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12.0))),
+              backgroundColor: context.colorScheme.surfaceContainerHigh,
+            ),
+            onPressed: onSelectPhotos,
+            icon: Icon(Icons.add_photo_alternate_rounded, color: context.primaryColor),
+            label: Padding(
+              padding: const EdgeInsets.only(left: 8.0),
+              child: Text(
+                context.t.create_shared_album_page_share_select_photos,
+                style: context.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: context.primaryColor),
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 8.0),
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10.0))),
+                  ),
+                  onPressed: onSelectDevicePhotos,
+                  icon: const Icon(Icons.phone_android_rounded, size: 20),
+                  label: Text(
+                    context.t.on_this_device,
+                    style: context.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 8.0),
+                    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10.0))),
+                  ),
+                  onPressed: onSelectFavorites,
+                  icon: const Icon(Icons.favorite_rounded, size: 20),
+                  label: Text(
+                    context.t.favorites,
+                    style: context.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -162,6 +204,44 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
       context: context,
       ref: ref,
       lockedAssets: selectedAssets,
+    );
+
+    if (assets == null || assets.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      selectedAssets = selectedAssets.union(assets);
+    });
+  }
+
+  Future<void> onSelectDevicePhotos() async {
+    final assets = await Navigator.of(context).push<Set<BaseAsset>>(
+      MaterialPageRoute(
+        builder: (_) => AssetSelectionTimelinePage(
+          lockedSelectionAssets: selectedAssets,
+          source: AssetSelectionSource.localAlbum,
+        ),
+      ),
+    );
+
+    if (assets == null || assets.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      selectedAssets = selectedAssets.union(assets);
+    });
+  }
+
+  Future<void> onSelectFavorites() async {
+    final assets = await Navigator.of(context).push<Set<BaseAsset>>(
+      MaterialPageRoute(
+        builder: (_) => AssetSelectionTimelinePage(
+          lockedSelectionAssets: selectedAssets,
+          source: AssetSelectionSource.favorite,
+        ),
+      ),
     );
 
     if (assets == null || assets.isEmpty) {
@@ -248,6 +328,18 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
               iconData: Icons.add_photo_alternate_outlined,
               onPressed: onSelectPhotos,
               labelText: context.t.add_photos,
+            ),
+            const SizedBox(width: 8),
+            AlbumActionFilledButton(
+              iconData: Icons.phone_android_rounded,
+              onPressed: onSelectDevicePhotos,
+              labelText: context.t.on_this_device,
+            ),
+            const SizedBox(width: 8),
+            AlbumActionFilledButton(
+              iconData: Icons.favorite_rounded,
+              onPressed: onSelectFavorites,
+              labelText: context.t.favorites,
             ),
           ],
         ),
