@@ -239,7 +239,6 @@ class _VideoPlaybackFeedbackState extends State<VideoPlaybackFeedback>
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
