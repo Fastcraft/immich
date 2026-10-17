@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:logging/logging.dart';
@@ -61,7 +62,10 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     try {
       await _controller?.loadVideoSource(source);
     } catch (e) {
-      _log.severe('Error loading video source: $e');
+      if (e is MissingPluginException) {
+        return;
+      }
+      _log.warning('Error loading video source: $e');
     }
   }
 
@@ -76,7 +80,10 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
       await _controller!.pause();
       await _flushSeek();
     } catch (e) {
-      _log.severe('Error pausing video: $e');
+      if (e is MissingPluginException) {
+        return;
+      }
+      _log.warning('Error pausing video: $e');
     }
   }
 
@@ -89,7 +96,10 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
       await _flushSeek();
       await _controller!.play();
     } catch (e) {
-      _log.severe('Error playing video: $e');
+      if (e is MissingPluginException) {
+        return;
+      }
+      _log.warning('Error playing video: $e');
     }
 
     _startBufferingTimer();
@@ -105,6 +115,9 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     try {
       await _controller?.seekTo(state.position.inMilliseconds);
     } catch (e) {
+      if (e is MissingPluginException) {
+        return;
+      }
       _log.warning('Error flushing seek: $e');
     }
   }

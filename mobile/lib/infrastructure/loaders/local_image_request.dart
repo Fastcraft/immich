@@ -16,14 +16,19 @@ class LocalImageRequest extends ImageRequest {
       return null;
     }
 
-    final info = await localImageApi.requestImage(
-      localId,
-      requestId: requestId,
-      width: width,
-      height: height,
-      isVideo: assetType == AssetType.video,
-      preferEncoded: false,
-    );
+    final Map<String, int>? info;
+    try {
+      info = await localImageApi.requestImage(
+        localId,
+        requestId: requestId,
+        width: width,
+        height: height,
+        isVideo: assetType == AssetType.video,
+        preferEncoded: false,
+      );
+    } on PlatformException {
+      return null;
+    }
     if (info == null) {
       return null;
     }
@@ -38,14 +43,19 @@ class LocalImageRequest extends ImageRequest {
       return null;
     }
 
-    final info = await localImageApi.requestImage(
-      localId,
-      requestId: requestId,
-      width: width,
-      height: height,
-      isVideo: assetType == AssetType.video,
-      preferEncoded: true,
-    );
+    final Map<String, int>? info;
+    try {
+      info = await localImageApi.requestImage(
+        localId,
+        requestId: requestId,
+        width: width,
+        height: height,
+        isVideo: assetType == AssetType.video,
+        preferEncoded: true,
+      );
+    } on PlatformException {
+      return null;
+    }
     if (info == null) {
       return null;
     }
