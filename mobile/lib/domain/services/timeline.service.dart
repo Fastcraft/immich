@@ -52,6 +52,8 @@ class TimelineFactory {
 
   TimelineService main(List<String> timelineUsers) => TimelineService(_timelineRepository.main(timelineUsers, groupBy));
 
+  TimelineService localAll() => TimelineService(_timelineRepository.localAll(groupBy));
+
   TimelineService localAlbum({required String albumId}) =>
       TimelineService(_timelineRepository.localAlbum(albumId, groupBy));
 
@@ -151,6 +153,10 @@ class TimelineService {
       return getAssets(index, count);
     }
 
+    if (_totalAssets == 0 || index < 0 || count <= 0) {
+      return const <BaseAsset>[];
+    }
+
     // if the requested offset is greater than the cached offset, the user scrolls forward "down"
     final bool forward = _bufferOffset < index;
 
@@ -182,11 +188,18 @@ class TimelineService {
       index + count <= _totalAssets;
 
   List<BaseAsset> getAssets(int index, int count) {
-    if (!hasRange(index, count)) {
-      throw RangeError('TimelineService::getAssets Index out of range');
+    if (index < 0 || count <= 0 || _buffer.isEmpty) {
+      return const <BaseAsset>[];
     }
     final int start = index - _bufferOffset;
-    return _buffer.slice(start, start + count);
+    if (start < 0 || start >= _buffer.length) {
+      return const <BaseAsset>[];
+    }
+    final int end = math.min(_buffer.length, start + count);
+    if (start >= end) {
+      return const <BaseAsset>[];
+    }
+    return _buffer.slice(start, end);
   }
 
   // Preload assets around the given index for asset viewer

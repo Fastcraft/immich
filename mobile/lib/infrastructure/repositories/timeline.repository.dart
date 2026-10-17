@@ -104,6 +104,62 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
     origin: TimelineOrigin.localAlbum,
   );
 
+  TimelineQuery localAll(GroupAssetsBy groupBy) => (
+    bucketSource: () => _watchLocalAllBucket(groupBy: groupBy),
+    assetSource: (offset, count) => _getLocalAllBucketAssets(offset: offset, count: count),
+    origin: TimelineOrigin.localAlbum,
+  );
+
+  Stream<List<Bucket>> _watchLocalAllBucket({GroupAssetsBy groupBy = GroupAssetsBy.day}) {
+    if (groupBy == GroupAssetsBy.none) {
+      return _db.localAssetEntity
+          .count()
+          .map(_generateBuckets)
+          .watchSingle();
+    }
+
+    final assetCountExp = _db.localAssetEntity.id.count();
+    final dateExp = _db.localAssetEntity.createdAt.dateFmt(groupBy, toLocal: true);
+
+    final query =
+        _db.localAssetEntity.selectOnly()
+          ..addColumns([assetCountExp, dateExp])
+          ..groupBy([dateExp])
+          ..orderBy([OrderingTerm.desc(dateExp)]);
+
+    return query.map((row) {
+      final date = row.read(dateExp);
+      if (date == null) return null;
+      final timeline = date.truncateDate(groupBy);
+      final assetCount = row.read(assetCountExp) ?? 0;
+      return TimeBucket(date: timeline, assetCount: assetCount);
+    }).watch().map((buckets) => buckets.whereType<Bucket>().toList());
+  }
+
+  Future<List<BaseAsset>> _getLocalAllBucketAssets({required int offset, required int count}) {
+    final query =
+        _db.localAssetEntity.select().join([
+            leftOuterJoin(
+              _db.remoteAssetEntity,
+              _db.localAssetEntity.checksum.equalsExp(_db.remoteAssetEntity.checksum) &
+                  _db.remoteAssetEntity.ownerId.isInQuery(
+                    _db.selectOnly(_db.authUserEntity)
+                      ..addColumns([_db.authUserEntity.id])
+                      ..limit(1),
+                  ),
+              useColumns: false,
+            ),
+          ])
+          ..addColumns([_db.remoteAssetEntity.id])
+          ..orderBy([OrderingTerm.desc(_db.localAssetEntity.createdAt)])
+          ..limit(count, offset: offset);
+
+    return query
+        .map((row) => row.readTable(_db.localAssetEntity).toDto(remoteId: row.read(_db.remoteAssetEntity.id)))
+        .get();
+  }
+
+
   Stream<List<Bucket>> _watchLocalAlbumBucket(String albumId, {GroupAssetsBy groupBy = GroupAssetsBy.day}) {
     if (groupBy == GroupAssetsBy.none) {
       return _db.localAlbumAssetEntity

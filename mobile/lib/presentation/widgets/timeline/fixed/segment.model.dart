@@ -145,6 +145,9 @@ class _FixedSegmentRow extends ConsumerWidget {
     TimelineService timelineService,
     bool isDynamicLayout,
   ) {
+    if (assets.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final widths = List.filled(assets.length, tileHeight);
 
     if (isDynamicLayout) {

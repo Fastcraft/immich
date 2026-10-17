@@ -2,12 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:immich_mobile/domain/models/album/local_album.model.dart';
 import 'package:immich_mobile/domain/models/asset/base_asset.model.dart';
 import 'package:immich_mobile/extensions/build_context_extensions.dart';
 import 'package:immich_mobile/generated/translations.g.dart';
 import 'package:immich_mobile/presentation/pages/asset_selection_timeline.page.dart';
-import 'package:immich_mobile/providers/infrastructure/album.provider.dart';
 
 /// Shows a bottom sheet allowing the user to pick assets from:
 /// 1. Timeline (cloud and backed up media)
@@ -125,73 +123,11 @@ Future<Set<BaseAsset>?> showAssetSourceSelectionSheet({
       );
 
     case _AssetSourceType.localAlbum:
-      final localAlbums = await ref.read(localAlbumProvider.future);
-      if (!context.mounted) {
-        return null;
-      }
-
-      if (localAlbums.isEmpty) {
-        return null;
-      }
-
-      LocalAlbum? targetAlbum;
-      if (localAlbums.length == 1) {
-        targetAlbum = localAlbums.first;
-      } else {
-        targetAlbum = await showModalBottomSheet<LocalAlbum>(
-          context: context,
-          backgroundColor: context.colorScheme.surface,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (BuildContext pickerContext) {
-            return SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      pickerContext.t.on_this_device,
-                      style: pickerContext.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: localAlbums.length,
-                      itemBuilder: (ctx, index) {
-                        final album = localAlbums[index];
-                        return ListTile(
-                          leading: const Icon(Icons.folder_outlined),
-                          title: Text(album.name),
-                          subtitle: Text(ctx.t.items_count(count: album.assetCount)),
-                          onTap: () => Navigator.of(ctx).pop(album),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      }
-
-      final selectedAlbum = targetAlbum;
-      if (selectedAlbum == null || !context.mounted) {
-        return null;
-      }
-
       return Navigator.of(context).push<Set<BaseAsset>>(
         MaterialPageRoute(
           builder: (_) => AssetSelectionTimelinePage(
             lockedSelectionAssets: lockedAssets,
             source: AssetSelectionSource.localAlbum,
-            localAlbumId: selectedAlbum.id,
-            title: selectedAlbum.name,
           ),
         ),
       );

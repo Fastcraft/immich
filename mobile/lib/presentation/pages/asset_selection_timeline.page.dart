@@ -74,7 +74,12 @@ class _AssetSelectionTimelinePageState extends ConsumerState<AssetSelectionTimel
               }
               timelineService = factory.favorite(user.id);
             case AssetSelectionSourceType.localDevice:
-              timelineService = factory.localAlbum(albumId: filterState.localAlbumId ?? '');
+              final albumId = filterState.localAlbumId;
+              if (albumId != null && albumId.isNotEmpty) {
+                timelineService = factory.localAlbum(albumId: albumId);
+              } else {
+                timelineService = factory.localAll();
+              }
             case AssetSelectionSourceType.timeline:
               final timelineUsers = ref.watch(timelineUsersProvider).valueOrNull ?? [];
               timelineService = factory.main(timelineUsers);

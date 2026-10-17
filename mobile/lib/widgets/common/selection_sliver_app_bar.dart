@@ -17,7 +17,7 @@ class SelectionSliverAppBar extends ConsumerStatefulWidget {
 
 class _SelectionSliverAppBarState extends ConsumerState<SelectionSliverAppBar> {
   Future<void> _showLocalAlbumPicker(BuildContext context, List<LocalAlbum> albums) async {
-    final selected = await showModalBottomSheet<LocalAlbum>(
+    final selected = await showModalBottomSheet<dynamic>(
       context: context,
       backgroundColor: context.colorScheme.surface,
       shape: const RoundedRectangleBorder(
@@ -38,9 +38,17 @@ class _SelectionSliverAppBarState extends ConsumerState<SelectionSliverAppBar> {
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: albums.length,
+                  itemCount: albums.length + 1,
                   itemBuilder: (c, index) {
-                    final album = albums[index];
+                    if (index == 0) {
+                      return ListTile(
+                        leading: const Icon(Icons.photo_library_outlined),
+                        title: Text(c.t.all),
+                        subtitle: Text(c.t.on_this_device),
+                        onTap: () => Navigator.of(c).pop('__ALL__'),
+                      );
+                    }
+                    final album = albums[index - 1];
                     return ListTile(
                       leading: const Icon(Icons.folder_outlined),
                       title: Text(album.name),
@@ -57,13 +65,19 @@ class _SelectionSliverAppBarState extends ConsumerState<SelectionSliverAppBar> {
     );
 
     if (selected != null && mounted) {
-      ref.read(assetSelectionFilterProvider.notifier).state = ref
-          .read(assetSelectionFilterProvider)
-          .copyWith(
-            source: AssetSelectionSourceType.localDevice,
-            localAlbumId: selected.id,
-            localAlbumTitle: selected.name,
-          );
+      if (selected == '__ALL__') {
+        ref.read(assetSelectionFilterProvider.notifier).state = const AssetSelectionFilterState(
+          source: AssetSelectionSourceType.localDevice,
+          localAlbumId: null,
+          localAlbumTitle: null,
+        );
+      } else if (selected is LocalAlbum) {
+        ref.read(assetSelectionFilterProvider.notifier).state = AssetSelectionFilterState(
+          source: AssetSelectionSourceType.localDevice,
+          localAlbumId: selected.id,
+          localAlbumTitle: selected.name,
+        );
+      }
     }
   }
 
@@ -137,7 +151,7 @@ class _SelectionSliverAppBarState extends ConsumerState<SelectionSliverAppBar> {
                             ? filterState.localAlbumTitle!
                             : context.t.on_this_device,
                       ),
-                      if (filterState.source == AssetSelectionSourceType.localDevice && localAlbums.length > 1) ...[
+                      if (localAlbums.isNotEmpty) ...[
                         const SizedBox(width: 4),
                         const Icon(Icons.arrow_drop_down, size: 18),
                       ],
@@ -145,14 +159,15 @@ class _SelectionSliverAppBarState extends ConsumerState<SelectionSliverAppBar> {
                   ),
                   selected: filterState.source == AssetSelectionSourceType.localDevice,
                   onSelected: (selected) async {
-                    if (filterState.source == AssetSelectionSourceType.localDevice && localAlbums.length > 1) {
-                      await _showLocalAlbumPicker(context, localAlbums);
+                    if (filterState.source == AssetSelectionSourceType.localDevice) {
+                      if (localAlbums.isNotEmpty) {
+                        await _showLocalAlbumPicker(context, localAlbums);
+                      }
                     } else {
-                      final firstAlbum = localAlbums.firstOrNull;
-                      ref.read(assetSelectionFilterProvider.notifier).state = filterState.copyWith(
+                      ref.read(assetSelectionFilterProvider.notifier).state = const AssetSelectionFilterState(
                         source: AssetSelectionSourceType.localDevice,
-                        localAlbumId: filterState.localAlbumId ?? firstAlbum?.id,
-                        localAlbumTitle: filterState.localAlbumTitle ?? firstAlbum?.name,
+                        localAlbumId: null,
+                        localAlbumTitle: null,
                       );
                     }
                   },
