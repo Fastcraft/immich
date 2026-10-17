@@ -14,7 +14,7 @@ class RemoteImageRequest extends ImageRequest {
       return null;
     }
 
-    final Map<Object?, Object?>? info;
+    final Map<String, int>? info;
     try {
       info = await remoteImageApi.requestImage(
         uri,
@@ -55,7 +55,7 @@ class RemoteImageRequest extends ImageRequest {
       return null;
     }
 
-    final Map<Object?, Object?>? info;
+    final Map<String, int>? info;
     try {
       info = await remoteImageApi.requestImage(
         uri,
