@@ -10,6 +10,7 @@ import 'package:immich_mobile/domain/models/store.model.dart';
 import 'package:immich_mobile/entities/store.entity.dart';
 import 'package:immich_mobile/infrastructure/repositories/network.repository.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as p;
 
 final uploadRepositoryProvider = Provider((ref) => UploadRepository());
 
@@ -68,6 +69,17 @@ class UploadRepository {
   }) async {
     final String savedEndpoint = Store.get(StoreKey.serverEndpoint);
 
+    final requestFields = Map<String, String>.from(fields);
+    if (!requestFields.containsKey('filename')) {
+      requestFields['filename'] = originalFileName;
+    }
+
+    final ext = p.extension(originalFileName);
+    final base = p.basenameWithoutExtension(originalFileName);
+    // Replace non-ASCII and header-unsafe characters with '_' for RFC-compliant HTTP headers
+    final safeBase = base.replaceAll(RegExp(r'[^\x20-\x7E]'), '_').replaceAll(RegExp(r'["\\]'), '_').trim();
+    final headerFileName = (safeBase.isEmpty ? 'upload' : safeBase) + ext;
+
     ProgressMultipartRequest buildRequest() {
       final request = ProgressMultipartRequest(
         'POST',
@@ -75,8 +87,8 @@ class UploadRepository {
         abortTrigger: cancelToken?.future,
         onProgress: onProgress,
       );
-      request.fields.addAll(fields);
-      request.files.add(MultipartFile("assetData", file.openRead(), file.lengthSync(), filename: originalFileName));
+      request.fields.addAll(requestFields);
+      request.files.add(MultipartFile("assetData", file.openRead(), file.lengthSync(), filename: headerFileName));
       return request;
     }
 

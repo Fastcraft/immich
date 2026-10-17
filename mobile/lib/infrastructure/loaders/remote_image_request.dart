@@ -14,13 +14,22 @@ class RemoteImageRequest extends ImageRequest {
       return null;
     }
 
-    final info = await remoteImageApi.requestImage(
-      uri,
-      requestId: requestId,
-      preferEncoded: false,
-      width: decodeSize?.width.ceil(),
-      height: decodeSize?.height.ceil(),
-    );
+    final Map<Object?, Object?>? info;
+    try {
+      info = await remoteImageApi.requestImage(
+        uri,
+        requestId: requestId,
+        preferEncoded: false,
+        width: decodeSize?.width.ceil(),
+        height: decodeSize?.height.ceil(),
+      );
+    } on PlatformException catch (e) {
+      if (e.message?.contains('404') == true || e.details?.toString().contains('404') == true) {
+        return null;
+      }
+      rethrow;
+    }
+
     // Android falls back to encoded data if native decoding fails, so check for both shapes of the response.
     final frame = switch (info) {
       {'pointer': final int pointer, 'length': final int length} => await _fromEncodedPlatformImage(
@@ -46,13 +55,22 @@ class RemoteImageRequest extends ImageRequest {
       return null;
     }
 
-    final info = await remoteImageApi.requestImage(
-      uri,
-      requestId: requestId,
-      preferEncoded: true,
-      width: null,
-      height: null,
-    );
+    final Map<Object?, Object?>? info;
+    try {
+      info = await remoteImageApi.requestImage(
+        uri,
+        requestId: requestId,
+        preferEncoded: true,
+        width: null,
+        height: null,
+      );
+    } on PlatformException catch (e) {
+      if (e.message?.contains('404') == true || e.details?.toString().contains('404') == true) {
+        return null;
+      }
+      rethrow;
+    }
+
     if (info == null) {
       return null;
     }

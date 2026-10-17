@@ -331,6 +331,7 @@ class ForegroundUploadService {
         'fileModifiedAt': asset.updatedAt.toUtc().toIso8601String(),
         'isFavorite': asset.isFavorite.toString(),
         'duration': (asset.durationMs ?? 0).toString(),
+        'filename': originalFileName,
       };
 
       // Upload live photo video first if available
