@@ -29,6 +29,7 @@ class ShareIntentPage extends ConsumerStatefulWidget {
 class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
   RemoteAlbum? _selectedAlbum;
   String? _newAlbumTitle;
+  String? _newAlbumDescription;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
           albums: albums,
           currentSelectedAlbumId: _selectedAlbum?.id,
           currentNewAlbumTitle: _newAlbumTitle,
+          currentNewAlbumDescription: _newAlbumDescription,
         );
       },
     );
@@ -65,15 +67,24 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
       setState(() {
         _selectedAlbum = null;
         _newAlbumTitle = null;
+        _newAlbumDescription = null;
       });
     } else if (result is RemoteAlbum) {
       setState(() {
         _selectedAlbum = result;
         _newAlbumTitle = null;
+        _newAlbumDescription = null;
+      });
+    } else if (result is NewAlbumModalResult) {
+      setState(() {
+        _newAlbumTitle = result.title;
+        _newAlbumDescription = result.description;
+        _selectedAlbum = null;
       });
     } else if (result is String) {
       setState(() {
         _newAlbumTitle = result;
+        _newAlbumDescription = null;
         _selectedAlbum = null;
       });
     }
@@ -86,7 +97,11 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
     if (_selectedAlbum != null) {
       albumText = _selectedAlbum!.name;
     } else if (_newAlbumTitle != null) {
-      albumText = '${_newAlbumTitle!} (${context.t.create_album})';
+      if (_newAlbumDescription != null && _newAlbumDescription!.isNotEmpty) {
+        albumText = '${_newAlbumTitle!} (${_newAlbumDescription!})';
+      } else {
+        albumText = '${_newAlbumTitle!} (${context.t.create_album})';
+      }
     } else {
       albumText = context.t.none;
     }
@@ -140,6 +155,7 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
                     setState(() {
                       _selectedAlbum = null;
                       _newAlbumTitle = null;
+                      _newAlbumDescription = null;
                     });
                   },
                 )
@@ -196,6 +212,7 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
           try {
             final album = await ref.read(remoteAlbumProvider.notifier).createAlbum(
               title: _newAlbumTitle!,
+              description: _newAlbumDescription,
               assetIds: uploadedIds,
             );
             if (context.mounted && album != null) {
@@ -321,11 +338,13 @@ class _ShareIntentAlbumPickerSheet extends StatefulWidget {
   final List<RemoteAlbum> albums;
   final String? currentSelectedAlbumId;
   final String? currentNewAlbumTitle;
+  final String? currentNewAlbumDescription;
 
   const _ShareIntentAlbumPickerSheet({
     required this.albums,
     this.currentSelectedAlbumId,
     this.currentNewAlbumTitle,
+    this.currentNewAlbumDescription,
   });
 
   @override
@@ -378,12 +397,20 @@ class _ShareIntentAlbumPickerSheetState extends State<_ShareIntentAlbumPickerShe
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       onPressed: () async {
-                        final albumName = await showDialog<String?>(
+                        final result = await showDialog<dynamic>(
                           context: context,
-                          builder: (context) => const NewAlbumNameModal(),
+                          builder: (context) => NewAlbumNameModal(
+                            withDescription: true,
+                            initialTitle: widget.currentNewAlbumTitle,
+                            initialDescription: widget.currentNewAlbumDescription,
+                          ),
                         );
-                        if (albumName != null && albumName.isNotEmpty && context.mounted) {
-                          Navigator.of(context).pop(albumName);
+                        if (result != null && context.mounted) {
+                          if (result is NewAlbumModalResult && result.title.isNotEmpty) {
+                            Navigator.of(context).pop(result);
+                          } else if (result is String && result.isNotEmpty) {
+                            Navigator.of(context).pop(result);
+                          }
                         }
                       },
                       icon: Icon(Icons.add, color: context.primaryColor, size: 20),
