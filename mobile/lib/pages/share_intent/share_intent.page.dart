@@ -208,6 +208,7 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
             // Error handling handled by provider
           }
         }
+        unawaited(ref.read(remoteAlbumProvider.notifier).refresh());
       }
     }
 
