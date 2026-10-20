@@ -62,19 +62,19 @@ class _NewAlbumNameModalState extends State<NewAlbumNameModal> {
               decoration: InputDecoration(
                 labelText: context.t.album_name,
                 hintText: context.t.name,
-                border: const OutlineInputBorder(),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             if (widget.withDescription) ...[
               const SizedBox(height: 16),
               TextFormField(
                 controller: descriptionController,
-                maxLines: 3,
-                minLines: 1,
+                maxLines: 4,
+                minLines: 2,
                 decoration: InputDecoration(
                   labelText: context.t.add_a_description,
                   hintText: context.t.add_a_description,
-                  border: const OutlineInputBorder(),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ],
