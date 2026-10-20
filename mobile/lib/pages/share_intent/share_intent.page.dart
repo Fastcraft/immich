@@ -10,6 +10,7 @@ import 'package:immich_mobile/models/upload/share_intent_attachment.model.dart';
 import 'package:immich_mobile/pages/common/large_leading_tile.dart';
 import 'package:immich_mobile/presentation/widgets/album/new_album_name_modal.widget.dart';
 import 'package:immich_mobile/providers/asset_viewer/share_intent_upload.provider.dart';
+import 'package:immich_mobile/providers/infrastructure/album.provider.dart';
 import 'package:immich_mobile/providers/infrastructure/remote_album.provider.dart';
 import 'package:immich_mobile/routing/router.dart';
 import 'package:immich_mobile/utils/url_helper.dart';
