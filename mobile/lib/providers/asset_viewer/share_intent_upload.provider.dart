@@ -59,7 +59,8 @@ class ShareIntentUploadStateNotifier extends StateNotifier<List<ShareIntentAttac
     state = [];
   }
 
-  Future<void> uploadAll(List<File> files) async {
+  Future<List<String>> uploadAll(List<File> files) async {
+    final List<String> uploadedRemoteAssetIds = [];
     for (final file in files) {
       final fileId = p.hash(file.path).toString();
       _updateStatus(fileId, UploadStatus.running);
@@ -71,7 +72,8 @@ class ShareIntentUploadStateNotifier extends StateNotifier<List<ShareIntentAttac
         final progress = totalBytes > 0 ? bytes / totalBytes : 0.0;
         _updateProgress(fileId, progress);
       },
-      onSuccess: (fileId, _) {
+      onSuccess: (fileId, remoteAssetId) {
+        uploadedRemoteAssetIds.add(remoteAssetId);
         _updateStatus(fileId, UploadStatus.complete, progress: 1.0);
       },
       onError: (fileId, errorMessage) {
@@ -79,6 +81,8 @@ class ShareIntentUploadStateNotifier extends StateNotifier<List<ShareIntentAttac
         _updateStatus(fileId, UploadStatus.failed);
       },
     );
+
+    return uploadedRemoteAssetIds;
   }
 
   void _updateStatus(String fileId, UploadStatus status, {double? progress}) {
