@@ -740,15 +740,27 @@ class AddToAlbumHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Future<void> onCreateAlbum() async {
-      final albumName = await showDialog<String?>(context: context, builder: (context) => const NewAlbumNameModal());
-      if (albumName == null || !context.mounted) {
+      final result = await showDialog<dynamic>(context: context, builder: (context) => const NewAlbumNameModal());
+      if (result == null || !context.mounted) {
+        return;
+      }
+
+      final String albumName;
+      final String? albumDescription;
+      if (result is NewAlbumModalResult) {
+        albumName = result.title;
+        albumDescription = result.description;
+      } else if (result is String) {
+        albumName = result;
+        albumDescription = null;
+      } else {
         return;
       }
 
       final selectedAssets = ref.read(multiSelectProvider).selectedAssets;
       final newAlbum = await ref
           .read(remoteAlbumProvider.notifier)
-          .createAlbumWithAssets(title: albumName, assets: selectedAssets);
+          .createAlbumWithAssets(title: albumName, description: albumDescription, assets: selectedAssets);
 
       if (!context.mounted) {
         return;
@@ -796,8 +808,20 @@ class CreateAlbumButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Future<void> onCreateAlbum() async {
-      final albumName = await showDialog<String?>(context: context, builder: (context) => const NewAlbumNameModal());
-      if (albumName == null || !context.mounted) {
+      final result = await showDialog<dynamic>(context: context, builder: (context) => const NewAlbumNameModal());
+      if (result == null || !context.mounted) {
+        return;
+      }
+
+      final String albumName;
+      final String? albumDescription;
+      if (result is NewAlbumModalResult) {
+        albumName = result.title;
+        albumDescription = result.description;
+      } else if (result is String) {
+        albumName = result;
+        albumDescription = null;
+      } else {
         return;
       }
 
@@ -810,7 +834,7 @@ class CreateAlbumButton extends ConsumerWidget {
 
       final album = await ref
           .read(remoteAlbumProvider.notifier)
-          .createAlbum(title: albumName, assetIds: [asset.remoteId!]);
+          .createAlbum(title: albumName, description: albumDescription, assetIds: [asset.remoteId!]);
 
       if (!context.mounted) {
         return;

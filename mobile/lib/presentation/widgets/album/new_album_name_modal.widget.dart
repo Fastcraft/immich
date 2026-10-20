@@ -15,7 +15,7 @@ class NewAlbumModalResult {
 class NewAlbumNameModal extends StatefulWidget {
   const NewAlbumNameModal({
     super.key,
-    this.withDescription = false,
+    this.withDescription = true,
     this.initialTitle,
     this.initialDescription,
   });
