@@ -229,8 +229,12 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
       }
     }
 
+    final candidateById = <int, ShareIntentAttachment>{
+      for (final candidate in candidates) candidate.id: candidate,
+    };
+
     bool isSelected(ShareIntentAttachment attachment) {
-      return candidates.contains(attachment);
+      return candidateById.containsKey(attachment.id);
     }
 
     void toggleSelection(ShareIntentAttachment attachment) {
@@ -263,20 +267,21 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
         itemCount: widget.attachments.length,
         itemBuilder: (context, index) {
           final attachment = widget.attachments[index];
-          final target = candidates.firstWhere((element) => element.id == attachment.id, orElse: () => attachment);
+          final target = candidateById[attachment.id] ?? attachment;
+          final selected = candidateById.containsKey(attachment.id);
 
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16),
             child: LargeLeadingTile(
               onTap: () => toggleSelection(attachment),
               disabled: isUploading || isUploaded,
-              selected: isSelected(attachment),
+              selected: selected,
               leading: Stack(
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.all(Radius.circular(16)),
                     child: attachment.isImage
-                        ? Image.file(attachment.file, width: 64, height: 64, fit: BoxFit.cover)
+                        ? Image.file(attachment.file, width: 64, height: 64, cacheWidth: 192, fit: BoxFit.cover)
                         : const SizedBox(
                             width: 64,
                             height: 64,
@@ -301,7 +306,7 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
               trailing: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: UploadStatusIcon(
-                  selected: isSelected(attachment),
+                  selected: selected,
                   status: target.status,
                   progress: target.uploadProgress,
                 ),
@@ -356,10 +361,10 @@ class _ShareIntentAlbumPickerSheetState extends State<_ShareIntentAlbumPickerShe
 
   @override
   Widget build(BuildContext context) {
-    final filteredAlbums = widget.albums.where((album) {
-      if (_searchQuery.isEmpty) return true;
-      return album.name.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    final queryLower = _searchQuery.toLowerCase();
+    final filteredAlbums = queryLower.isEmpty
+        ? widget.albums
+        : widget.albums.where((album) => album.name.toLowerCase().contains(queryLower)).toList(growable: false);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.65,

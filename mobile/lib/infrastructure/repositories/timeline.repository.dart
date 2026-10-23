@@ -137,25 +137,22 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
   }
 
   Future<List<BaseAsset>> _getLocalAllBucketAssets({required int offset, required int count}) {
-    final query =
-        _db.localAssetEntity.select().join([
-            leftOuterJoin(
-              _db.remoteAssetEntity,
-              _db.localAssetEntity.checksum.equalsExp(_db.remoteAssetEntity.checksum) &
-                  _db.remoteAssetEntity.ownerId.isInQuery(
-                    _db.selectOnly(_db.authUserEntity)
-                      ..addColumns([_db.authUserEntity.id])
-                      ..limit(1),
-                  ),
-              useColumns: false,
-            ),
-          ])
-          ..addColumns([_db.remoteAssetEntity.id])
-          ..orderBy([OrderingTerm.desc(_db.localAssetEntity.createdAt)])
-          ..limit(count, offset: offset);
+    final remoteId = subqueryExpression<String>(
+      _db.remoteAssetEntity.selectOnly()
+        ..addColumns([_db.remoteAssetEntity.id])
+        ..where(
+          _db.remoteAssetEntity.checksum.equalsExp(_db.localAssetEntity.checksum) &
+              _db.remoteAssetEntity.deletedAt.isNull(),
+        )
+        ..limit(1),
+    );
+
+    final query = _db.localAssetEntity.select().addColumns([remoteId]).join(const [])
+      ..orderBy([OrderingTerm.desc(_db.localAssetEntity.createdAt)])
+      ..limit(count, offset: offset);
 
     return query
-        .map((row) => row.readTable(_db.localAssetEntity).toDto(remoteId: row.read(_db.remoteAssetEntity.id)))
+        .map((row) => row.readTable(_db.localAssetEntity).toDto(remoteId: row.read(remoteId)))
         .get();
   }
 
@@ -192,31 +189,30 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
   }
 
   Future<List<BaseAsset>> _getLocalAlbumBucketAssets(String albumId, {required int offset, required int count}) {
+    final remoteId = subqueryExpression<String>(
+      _db.remoteAssetEntity.selectOnly()
+        ..addColumns([_db.remoteAssetEntity.id])
+        ..where(
+          _db.remoteAssetEntity.checksum.equalsExp(_db.localAssetEntity.checksum) &
+              _db.remoteAssetEntity.deletedAt.isNull(),
+        )
+        ..limit(1),
+    );
+
     final query =
-        _db.localAssetEntity.select().join([
+        _db.localAssetEntity.select().addColumns([remoteId]).join([
             innerJoin(
               _db.localAlbumAssetEntity,
               _db.localAlbumAssetEntity.assetId.equalsExp(_db.localAssetEntity.id),
               useColumns: false,
             ),
-            leftOuterJoin(
-              _db.remoteAssetEntity,
-              _db.localAssetEntity.checksum.equalsExp(_db.remoteAssetEntity.checksum) &
-                  _db.remoteAssetEntity.ownerId.isInQuery(
-                    _db.selectOnly(_db.authUserEntity)
-                      ..addColumns([_db.authUserEntity.id])
-                      ..limit(1),
-                  ),
-              useColumns: false,
-            ),
           ])
-          ..addColumns([_db.remoteAssetEntity.id])
           ..where(_db.localAlbumAssetEntity.albumId.equals(albumId))
           ..orderBy([OrderingTerm.desc(_db.localAssetEntity.createdAt)])
           ..limit(count, offset: offset);
 
     return query
-        .map((row) => row.readTable(_db.localAssetEntity).toDto(remoteId: row.read(_db.remoteAssetEntity.id)))
+        .map((row) => row.readTable(_db.localAssetEntity).toDto(remoteId: row.read(remoteId)))
         .get();
   }
 
@@ -731,25 +727,24 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
     SortAssetsBy sortBy = SortAssetsBy.taken,
   }) {
     if (joinLocal) {
-      final query =
-          _db.remoteAssetEntity.select().join([
-              leftOuterJoin(
-                _db.localAssetEntity,
-                _db.remoteAssetEntity.checksum.equalsExp(_db.localAssetEntity.checksum),
-                useColumns: false,
-              ),
-            ])
-            ..addColumns([_db.localAssetEntity.id])
-            ..where(filter(_db.remoteAssetEntity))
-            ..orderBy([
-              OrderingTerm.desc(
-                sortBy == SortAssetsBy.uploaded ? _db.remoteAssetEntity.uploadedAt : _db.remoteAssetEntity.createdAt,
-              ),
-            ])
-            ..limit(count, offset: offset);
+      final localId = subqueryExpression<String>(
+        _db.localAssetEntity.selectOnly()
+          ..addColumns([_db.localAssetEntity.id])
+          ..where(_db.localAssetEntity.checksum.equalsExp(_db.remoteAssetEntity.checksum))
+          ..limit(1),
+      );
+
+      final query = _db.remoteAssetEntity.select().addColumns([localId]).join(const [])
+        ..where(filter(_db.remoteAssetEntity))
+        ..orderBy([
+          OrderingTerm.desc(
+            sortBy == SortAssetsBy.uploaded ? _db.remoteAssetEntity.uploadedAt : _db.remoteAssetEntity.createdAt,
+          ),
+        ])
+        ..limit(count, offset: offset);
 
       return query
-          .map((row) => row.readTable(_db.remoteAssetEntity).toDto(localId: row.read(_db.localAssetEntity.id)))
+          .map((row) => row.readTable(_db.remoteAssetEntity).toDto(localId: row.read(localId)))
           .get();
     } else {
       final query = _db.remoteAssetEntity.select()
@@ -796,13 +791,28 @@ extension on $RemoteAssetEntityTable {
   }
 }
 
+final _dayFormat = DateFormat("y-M-d", 'en');
+final _monthFormat = DateFormat("y-M", 'en');
+
 extension on String {
   DateTime truncateDate(GroupAssetsBy groupBy) {
-    final format = switch (groupBy) {
-      GroupAssetsBy.day || GroupAssetsBy.auto => "y-M-d",
-      GroupAssetsBy.month => "y-M",
+    if (groupBy == GroupAssetsBy.none) {
+      throw ArgumentError("GroupAssetsBy.none is not supported for date formatting");
+    }
+    // Fast-path ISO parsing ("YYYY-MM-DD" or "YYYY-MM") without DateFormat allocation overhead
+    final parts = split('-');
+    if (parts.length >= 2) {
+      final year = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final day = (groupBy == GroupAssetsBy.month || parts.length < 3) ? 1 : (int.tryParse(parts[2]) ?? 1);
+      if (year != null && month != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return switch (groupBy) {
+      GroupAssetsBy.day || GroupAssetsBy.auto => _dayFormat.parse(this),
+      GroupAssetsBy.month => _monthFormat.parse(this),
       GroupAssetsBy.none => throw ArgumentError("GroupAssetsBy.none is not supported for date formatting"),
     };
-    return DateFormat(format, 'en').parse(this);
   }
 }

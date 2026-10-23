@@ -85,7 +85,7 @@ class _SelectionSliverAppBarState extends ConsumerState<SelectionSliverAppBar> {
   Widget build(BuildContext context) {
     final selection = ref.watch(multiSelectProvider.select((s) => s.selectedAssets));
     final toExclude = ref.watch(multiSelectProvider.select((s) => s.lockedSelectionAssets));
-    final filteredAssets = selection.where((asset) => !toExclude.contains(asset)).toSet();
+    final filteredAssets = toExclude.isEmpty ? selection : selection.difference(toExclude);
 
     final filterState = ref.watch(assetSelectionFilterProvider);
     final localAlbums = ref.watch(localAlbumProvider).valueOrNull ?? [];

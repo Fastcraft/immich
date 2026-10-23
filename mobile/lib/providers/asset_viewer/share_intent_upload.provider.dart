@@ -61,9 +61,15 @@ class ShareIntentUploadStateNotifier extends StateNotifier<List<ShareIntentAttac
 
   Future<List<String>> uploadAll(List<File> files) async {
     final List<String> uploadedRemoteAssetIds = [];
-    for (final file in files) {
-      final fileId = p.hash(file.path).toString();
-      _updateStatus(fileId, UploadStatus.running);
+    final runningIds = <int>{for (final file in files) p.hash(file.path)};
+    if (runningIds.isNotEmpty) {
+      state = [
+        for (final attachment in state)
+          if (runningIds.contains(attachment.id))
+            attachment.copyWith(status: UploadStatus.running)
+          else
+            attachment,
+      ];
     }
 
     await _foregroundUploadService.uploadShareIntent(
@@ -86,21 +92,40 @@ class ShareIntentUploadStateNotifier extends StateNotifier<List<ShareIntentAttac
   }
 
   void _updateStatus(String fileId, UploadStatus status, {double? progress}) {
-    final id = int.parse(fileId);
-    state = [
-      for (final attachment in state)
-        if (attachment.id == id)
-          attachment.copyWith(status: status, uploadProgress: progress ?? attachment.uploadProgress)
-        else
-          attachment,
-    ];
+    final id = int.tryParse(fileId);
+    if (id == null) {
+      return;
+    }
+    final index = state.indexWhere((a) => a.id == id);
+    if (index == -1) {
+      return;
+    }
+    final current = state[index];
+    final nextProgress = progress ?? current.uploadProgress;
+    if (current.status == status && current.uploadProgress == nextProgress) {
+      return;
+    }
+    final next = List<ShareIntentAttachment>.of(state, growable: false);
+    next[index] = current.copyWith(status: status, uploadProgress: nextProgress);
+    state = next;
   }
 
   void _updateProgress(String fileId, double progress) {
-    final id = int.parse(fileId);
-    state = [
-      for (final attachment in state)
-        if (attachment.id == id) attachment.copyWith(uploadProgress: progress) else attachment,
-    ];
+    final id = int.tryParse(fileId);
+    if (id == null) {
+      return;
+    }
+    final index = state.indexWhere((a) => a.id == id);
+    if (index == -1) {
+      return;
+    }
+    final current = state[index];
+    // Throttle UI state updates to >= 1% steps to avoid rebuilding on every network packet
+    if ((progress - current.uploadProgress).abs() < 0.01 && progress < 1.0) {
+      return;
+    }
+    final next = List<ShareIntentAttachment>.of(state, growable: false);
+    next[index] = current.copyWith(uploadProgress: progress);
+    state = next;
   }
 }

@@ -136,14 +136,8 @@ class _VideoPlaybackFeedbackState extends State<VideoPlaybackFeedback>
           if (hasSkip)
             Align(
               alignment: isForward ? Alignment.centerRight : Alignment.centerLeft,
-              child: AnimatedBuilder(
-                animation: _animController,
-                builder: (context, child) {
-                  return Opacity(
-                    opacity: _opacityAnimation.value,
-                    child: child,
-                  );
-                },
+              child: FadeTransition(
+                opacity: _opacityAnimation,
                 child: FractionallySizedBox(
                   widthFactor: 0.5,
                   heightFactor: 1.0,

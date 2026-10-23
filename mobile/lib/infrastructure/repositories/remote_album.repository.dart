@@ -161,23 +161,27 @@ class RemoteAlbumRepository extends DatabaseAccessor<Drift> with $RemoteAlbumRep
   }
 
   Future<void> create(RemoteAlbum album, List<String> assetIds) async {
-    final candidateThumbId = album.thumbnailAssetId ?? (assetIds.isNotEmpty ? assetIds.first : null);
-    String? validThumbId;
-    if (candidateThumbId != null) {
-      final exists = await (_db.select(_db.remoteAssetEntity)..where((tbl) => tbl.id.equals(candidateThumbId))).getSingleOrNull();
-      if (exists != null) {
-        validThumbId = candidateThumbId;
-      }
-    }
-
-    List<String> validAssetIds = [];
-    if (assetIds.isNotEmpty) {
-      final existingAssets = await (_db.select(_db.remoteAssetEntity)..where((tbl) => tbl.id.isIn(assetIds))).get();
-      final existingSet = existingAssets.map((e) => e.id).toSet();
-      validAssetIds = assetIds.where(existingSet.contains).toList();
-    }
-
     await _db.transaction(() async {
+      final candidateThumbId = album.thumbnailAssetId ?? (assetIds.isNotEmpty ? assetIds.first : null);
+      final idsToCheck = <String>{
+        ...assetIds,
+        if (candidateThumbId != null) candidateThumbId,
+      };
+
+      Set<String> existingSet = const {};
+      if (idsToCheck.isNotEmpty) {
+        final query = _db.remoteAssetEntity.selectOnly()
+          ..addColumns([_db.remoteAssetEntity.id])
+          ..where(_db.remoteAssetEntity.id.isIn(idsToCheck));
+        final rows = await query.map((row) => row.read(_db.remoteAssetEntity.id)!).get();
+        existingSet = rows.toSet();
+      }
+
+      final validThumbId = (candidateThumbId != null && existingSet.contains(candidateThumbId))
+          ? candidateThumbId
+          : null;
+      final validAssetIds = assetIds.where(existingSet.contains).toList(growable: false);
+
       final entity = RemoteAlbumEntityCompanion(
         id: Value(album.id),
         name: Value(album.name),
@@ -205,7 +209,7 @@ class RemoteAlbumRepository extends DatabaseAccessor<Drift> with $RemoteAlbumRep
         );
 
         await _db.batch((batch) {
-          batch.insertAll(_db.remoteAlbumAssetEntity, albumAssets);
+          batch.insertAll(_db.remoteAlbumAssetEntity, albumAssets, mode: InsertMode.insertOrIgnore);
         });
       }
     });
@@ -303,17 +307,20 @@ class RemoteAlbumRepository extends DatabaseAccessor<Drift> with $RemoteAlbumRep
       return 0;
     }
 
-    final existingAssets = await (_db.select(_db.remoteAssetEntity)..where((tbl) => tbl.id.isIn(assetIds))).get();
-    final existingSet = existingAssets.map((e) => e.id).toSet();
-    final validAssetIds = assetIds.where(existingSet.contains).toList();
-
     await _db.transaction(() async {
+      final query = _db.remoteAssetEntity.selectOnly()
+        ..addColumns([_db.remoteAssetEntity.id])
+        ..where(_db.remoteAssetEntity.id.isIn(assetIds));
+      final existingRows = await query.map((row) => row.read(_db.remoteAssetEntity.id)!).get();
+      final existingSet = existingRows.toSet();
+      final validAssetIds = assetIds.where(existingSet.contains).toList(growable: false);
+
       if (validAssetIds.isNotEmpty) {
         final albumAssets = validAssetIds.map(
           (assetId) => RemoteAlbumAssetEntityCompanion(albumId: Value(albumId), assetId: Value(assetId)),
         );
         await _db.batch((batch) {
-          batch.insertAll(_db.remoteAlbumAssetEntity, albumAssets);
+          batch.insertAll(_db.remoteAlbumAssetEntity, albumAssets, mode: InsertMode.insertOrIgnore);
         });
 
         final album = _db.update(_db.remoteAlbumEntity)

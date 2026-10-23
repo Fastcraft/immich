@@ -31,6 +31,7 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
   FocusNode albumDescriptionTextFieldFocusNode = FocusNode();
   bool isAlbumTitleTextFieldFocus = false;
   bool isCreatingAlbum = false;
+  bool _hasNonEmptyTitle = false;
   Set<BaseAsset> selectedAssets = {};
 
   @override
@@ -39,11 +40,17 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
     if (widget.initialAssets != null) {
       selectedAssets = widget.initialAssets!.toSet();
     }
+    _hasNonEmptyTitle = albumTitleController.text.trim().isNotEmpty;
     albumTitleController.addListener(_onTitleChanged);
   }
 
   void _onTitleChanged() {
-    setState(() {});
+    final hasTitle = albumTitleController.text.trim().isNotEmpty;
+    if (_hasNonEmptyTitle != hasTitle) {
+      setState(() {
+        _hasNonEmptyTitle = hasTitle;
+      });
+    }
   }
 
   @override
@@ -56,7 +63,7 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
     super.dispose();
   }
 
-  bool get _canCreateAlbum => albumTitleController.text.trim().isNotEmpty && !isCreatingAlbum;
+  bool get _canCreateAlbum => _hasNonEmptyTitle && !isCreatingAlbum;
 
   String _getEffectiveTitle() {
     return albumTitleController.text.isNotEmpty ? albumTitleController.text : context.t.create_album_page_untitled;
@@ -167,6 +174,7 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
   }
 
   Widget _buildSelectedImageGrid() {
+    final assetsList = selectedAssets.toList(growable: false);
     return SliverPadding(
       padding: const EdgeInsets.only(top: 16.0),
       sliver: SliverGrid(
@@ -176,12 +184,12 @@ class _CreateAlbumPageState extends ConsumerState<CreateAlbumPage> {
           mainAxisSpacing: 1.0,
         ),
         delegate: SliverChildBuilderDelegate((context, index) {
-          final asset = selectedAssets.elementAt(index);
+          final asset = assetsList[index];
           return GestureDetector(
             onTap: onBackgroundTapped,
             child: Thumbnail.fromAsset(asset: asset),
           );
-        }, childCount: selectedAssets.length),
+        }, childCount: assetsList.length),
       ),
     );
   }
