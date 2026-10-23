@@ -142,7 +142,12 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
         ..addColumns([_db.remoteAssetEntity.id])
         ..where(
           _db.remoteAssetEntity.checksum.equalsExp(_db.localAssetEntity.checksum) &
-              _db.remoteAssetEntity.deletedAt.isNull(),
+              _db.remoteAssetEntity.deletedAt.isNull() &
+              _db.remoteAssetEntity.ownerId.isInQuery(
+                _db.selectOnly(_db.authUserEntity)
+                  ..addColumns([_db.authUserEntity.id])
+                  ..limit(1),
+              ),
         )
         ..limit(1),
     );
@@ -194,7 +199,12 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
         ..addColumns([_db.remoteAssetEntity.id])
         ..where(
           _db.remoteAssetEntity.checksum.equalsExp(_db.localAssetEntity.checksum) &
-              _db.remoteAssetEntity.deletedAt.isNull(),
+              _db.remoteAssetEntity.deletedAt.isNull() &
+              _db.remoteAssetEntity.ownerId.isInQuery(
+                _db.selectOnly(_db.authUserEntity)
+                  ..addColumns([_db.authUserEntity.id])
+                  ..limit(1),
+              ),
         )
         ..limit(1),
     );

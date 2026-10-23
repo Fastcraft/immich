@@ -138,6 +138,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     UserDto? user = _userService.tryGetMyUser();
 
+    if (user != null) {
+      state = state.copyWith(
+        deviceId: deviceId,
+        userId: user.id,
+        userEmail: user.email,
+        isAuthenticated: true,
+        name: user.name,
+        isAdmin: user.isAdmin,
+      );
+    }
+
     try {
       final serverUser = await _userService.refreshMyUser().timeout(_timeoutDuration);
       if (serverUser == null) {

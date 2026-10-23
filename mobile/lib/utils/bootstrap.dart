@@ -73,6 +73,7 @@ abstract final class Bootstrap {
       logRepository: LogRepository(dataController.logDb),
       settingsRepository: settingsRepo,
       shouldBuffer: shouldBufferLogs,
+      truncateOnInit: shouldBufferLogs,
     );
 
     if (loggerDatabaseWasRecreated) {

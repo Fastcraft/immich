@@ -4,7 +4,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:immich_mobile/domain/models/store.model.dart';
 import 'package:immich_mobile/domain/services/log.service.dart';
 import 'package:immich_mobile/entities/store.entity.dart';
-import 'package:immich_mobile/extensions/platform_extensions.dart';
 import 'package:immich_mobile/providers/auth.provider.dart';
 import 'package:immich_mobile/providers/background_sync.provider.dart';
 import 'package:immich_mobile/providers/backup/backup.provider.dart';
@@ -133,7 +132,7 @@ class AppLifeCycleNotifier extends StateNotifier<AppLifeCycleEnum> {
       bool syncSuccess = false;
       await Future.wait([
         _safeRun(() {
-          final full = CurrentPlatform.isAndroid || _fullSyncPending;
+          final full = _fullSyncPending;
           _fullSyncPending = false;
           return backgroundManager.syncLocal(full: full);
         }, "syncLocal"),

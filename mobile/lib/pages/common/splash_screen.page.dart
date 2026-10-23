@@ -288,13 +288,11 @@ class SplashScreenPageState extends ConsumerState<SplashScreenPage> {
   @override
   void initState() {
     super.initState();
-    unawaited(
-      ref
-          .read(authProvider.notifier)
-          .setOpenApiServiceEndpoint()
-          .then(logConnectionInfo)
-          .whenComplete(() => resumeSession()),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(resumeSession());
+      }
+    });
   }
 
   void logConnectionInfo(String? endpoint) {
@@ -311,6 +309,8 @@ class SplashScreenPageState extends ConsumerState<SplashScreenPage> {
     final accessToken = Store.tryGet(StoreKey.accessToken);
 
     if (accessToken != null && serverUrl != null && endpoint != null) {
+      final authNotifier = ref.read(authProvider.notifier);
+      final appRouter = ref.read(appRouterProvider);
       final infoProvider = ref.read(serverInfoProvider.notifier);
       final wsProvider = ref.read(websocketProvider.notifier);
       final backgroundManager = ref.read(backgroundSyncProvider);
@@ -318,19 +318,35 @@ class SplashScreenPageState extends ConsumerState<SplashScreenPage> {
       final lifeCycle = ref.read(appStateProvider.notifier);
       final viewIntentHandler = ref.read(viewIntentHandlerProvider);
 
-      unawaited(
-        ref
-            .read(authProvider.notifier)
+      if (context.router.current.name == SplashScreenRoute.name) {
+        unawaited(context.router.replaceAll([const TabShellRoute(), ?widget.deepLink]));
+      }
+
+      unawaited(() async {
+        try {
+          final resolvedEndpoint = await authNotifier.setOpenApiServiceEndpoint();
+          logConnectionInfo(resolvedEndpoint);
+        } catch (e) {
+          log.warning('Failed to switch endpoint on startup: $e');
+        }
+
+        await authNotifier
             .saveAuthInfo(accessToken: accessToken)
             .then(
-              (_) async {
+              (isSuccess) async {
+                if (!isSuccess) {
+                  log.severe('Failed to validate auth info with access token');
+                  unawaited(authNotifier.logout());
+                  unawaited(appRouter.replaceAll([const LoginRoute()]));
+                  return;
+                }
                 try {
                   wsProvider.connect();
                   unawaited(infoProvider.getServerInfo());
 
                   bool syncSuccess = false;
                   await Future.wait([
-                    backgroundManager.syncLocal(full: true),
+                    backgroundManager.syncLocal(full: false),
                     backgroundManager.syncRemote().then((success) => syncSuccess = success),
                   ]);
 
@@ -357,24 +373,16 @@ class SplashScreenPageState extends ConsumerState<SplashScreenPage> {
               },
               onError: (exception) {
                 log.severe('Failed to update auth info with access token: $accessToken');
-                if (!mounted) {
-                  return;
-                }
-
-                unawaited(ref.read(authProvider.notifier).logout());
-                unawaited(context.router.replaceAll([const LoginRoute()]));
+                unawaited(authNotifier.logout());
+                unawaited(appRouter.replaceAll([const LoginRoute()]));
               },
-            ),
-      );
+            );
+      }());
     } else {
       log.severe('Missing crucial offline login info - Logging out completely');
       unawaited(ref.read(authProvider.notifier).logout());
       unawaited(context.router.replaceAll([const LoginRoute()]));
       return;
-    }
-
-    if (context.router.current.name == SplashScreenRoute.name) {
-      unawaited(context.router.replaceAll([const TabShellRoute(), ?widget.deepLink]));
     }
   }
 

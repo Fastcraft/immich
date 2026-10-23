@@ -40,11 +40,13 @@ class LogService {
     required LogRepository logRepository,
     required SettingsRepository settingsRepository,
     bool shouldBuffer = true,
+    bool truncateOnInit = true,
   }) async {
     _instance ??= await create(
       logRepository: logRepository,
       settingsRepository: settingsRepository,
       shouldBuffer: shouldBuffer,
+      truncateOnInit: truncateOnInit,
     );
     return _instance!;
   }
@@ -53,9 +55,12 @@ class LogService {
     required LogRepository logRepository,
     required SettingsRepository settingsRepository,
     bool shouldBuffer = true,
+    bool truncateOnInit = true,
   }) async {
     final instance = LogService._(logRepository, settingsRepository, shouldBuffer);
-    await logRepository.truncate(limit: kLogTruncateLimit);
+    if (truncateOnInit) {
+      unawaited(logRepository.truncate(limit: kLogTruncateLimit));
+    }
     final level = instance._settingsRepository.appConfig.logLevel;
     Logger.root.level = Level.LEVELS.elementAtOrNull(level.index) ?? Level.INFO;
     return instance;
