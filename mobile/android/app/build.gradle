@@ -51,10 +51,10 @@ android {
       def keyPasswordVal = System.getenv("ANDROID_KEY_PASSWORD")
       def storePasswordVal = System.getenv("ANDROID_STORE_PASSWORD")
 
-      keyAlias keyAliasVal ?: keystoreProperties['keyAlias']
-      keyPassword keyPasswordVal ?: keystoreProperties['keyPassword']
+      keyAlias keyAliasVal ?: (keystoreProperties['keyAlias'] ?: 'immichkey')
+      keyPassword keyPasswordVal ?: (keystoreProperties['keyPassword'] ?: 'immichkey')
       storeFile file("../key.jks").exists() ? file("../key.jks") : file(keystoreProperties['storeFile'] ?: '../key.jks')
-      storePassword storePasswordVal ?: keystoreProperties['storePassword']
+      storePassword storePasswordVal ?: (keystoreProperties['storePassword'] ?: 'immichkey')
     }
   }
 
