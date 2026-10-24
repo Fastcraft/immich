@@ -129,11 +129,8 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
 
     state = state.copyWith(position: position);
 
-    if (_seekTimer?.isActive ?? false) {
-      return;
-    }
-
-    _seekTimer = Timer(const Duration(milliseconds: 150), () async {
+    _seekTimer?.cancel();
+    _seekTimer = Timer(const Duration(milliseconds: 300), () async {
       try {
         await _controller?.seekTo(state.position.inMilliseconds);
       } catch (e) {
