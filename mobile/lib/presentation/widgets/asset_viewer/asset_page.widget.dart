@@ -64,6 +64,7 @@ class _AssetPageState extends ConsumerState<AssetPage> {
   static const double _maxImagePixelSize = 12.0;
 
   final _feedbackController = VideoPlaybackFeedbackController();
+  bool _isSkipFeedbackActive = false;
   bool _isFastForwarding = false;
   Offset? _lastDoubleTapDownPosition;
 
@@ -76,6 +77,11 @@ class _AssetPageState extends ConsumerState<AssetPage> {
   @override
   void initState() {
     super.initState();
+    _feedbackController.onActiveChanged = (active) {
+      if (mounted && _isSkipFeedbackActive != active) {
+        setState(() => _isSkipFeedbackActive = active);
+      }
+    };
     _eventSubscription = EventStream.shared.listen(_onEvent);
     _asset = ref.read(timelineServiceProvider).getAssetSafe(widget.index);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,6 +105,7 @@ class _AssetPageState extends ConsumerState<AssetPage> {
 
   @override
   void dispose() {
+    _feedbackController.onActiveChanged = null;
     if (_isFastForwarding && _asset != null) {
       ref.read(videoPlayerProvider(_asset!.id).notifier).setPlaybackSpeed(1.0);
     }
@@ -306,6 +313,25 @@ class _AssetPageState extends ConsumerState<AssetPage> {
   void _onLongPress(BuildContext context, LongPressStartDetails details, PhotoViewControllerValue controllerValue) =>
       ref.read(isPlayingMotionVideoProvider.notifier).playing = true;
 
+  void _onVideoTapUp(
+    BuildContext context,
+    TapUpDetails details,
+    PhotoViewControllerValue controllerValue,
+    BaseAsset asset,
+  ) {
+    if (_showingDetails || _dragStart != null) {
+      return;
+    }
+
+    if (_feedbackController.isActive && asset.isVideo) {
+      final isLeftSide = details.globalPosition.dx < context.width / 2;
+      _triggerVideoSkip(asset, isLeftSide: isLeftSide);
+      return;
+    }
+
+    _onTapUp(context, details, controllerValue);
+  }
+
   void _onVideoDoubleTapDown(TapDownDetails details) {
     _lastDoubleTapDownPosition = details.globalPosition;
   }
@@ -322,20 +348,25 @@ class _AssetPageState extends ConsumerState<AssetPage> {
 
     final screenWidth = context.width;
     final isLeftSide = pos.dx < screenWidth / 2;
+    _triggerVideoSkip(asset, isLeftSide: isLeftSide);
+  }
 
+  void _triggerVideoSkip(BaseAsset asset, {required bool isLeftSide}) {
     final videoState = ref.read(videoPlayerProvider(asset.id));
+    final notifier = ref.read(videoPlayerProvider(asset.id).notifier);
     final effectiveDuration = videoState.duration > Duration.zero ? videoState.duration : asset.duration;
-    final currentPosition = videoState.position;
+    final currentPosition = notifier.effectivePosition;
 
     // Guard against uninitialized or zero-length video
     if (effectiveDuration <= Duration.zero) {
       return;
     }
 
-    final notifier = ref.read(videoPlayerProvider(asset.id).notifier);
     const tenSeconds = Duration(seconds: 10);
     const startThreshold = Duration(milliseconds: 150);
-    const endMargin = Duration(milliseconds: 250);
+    final endMargin = effectiveDuration >= tenSeconds
+        ? const Duration(milliseconds: 1000)
+        : const Duration(milliseconds: 250);
 
     if (effectiveDuration < tenSeconds) {
       // For short videos (<10s), jump safely to beginning or near end without crashing
@@ -362,13 +393,13 @@ class _AssetPageState extends ConsumerState<AssetPage> {
         if (currentPosition <= startThreshold) {
           return;
         }
-        notifier.seekRelative(-tenSeconds);
+        notifier.seekRelative(-tenSeconds, fallbackDuration: effectiveDuration);
         _feedbackController.triggerSkip(SkipDirection.rewind);
       } else {
         if (currentPosition >= effectiveDuration - endMargin) {
           return;
         }
-        notifier.seekRelative(tenSeconds);
+        notifier.seekRelative(tenSeconds, fallbackDuration: effectiveDuration);
         _feedbackController.triggerSkip(SkipDirection.forward);
       }
     }
@@ -508,10 +539,10 @@ class _AssetPageState extends ConsumerState<AssetPage> {
       onDragUpdate: _onDragUpdate,
       onDragEnd: _onDragEnd,
       onDragCancel: _onDragCancel,
-      onTapUp: _onTapUp,
+      onTapUp: (ctx, details, val) => _onVideoTapUp(ctx, details, val, asset),
       enableDoubleTapZoom: false,
-      onDoubleTapDown: _onVideoDoubleTapDown,
-      onDoubleTap: () => _onVideoDoubleTap(asset),
+      onDoubleTapDown: _isSkipFeedbackActive ? null : _onVideoDoubleTapDown,
+      onDoubleTap: _isSkipFeedbackActive ? null : () => _onVideoDoubleTap(asset),
       onLongPressStart: (_, _, _) => _onVideoLongPressStart(asset),
       onLongPressEnd: (_) => _onVideoLongPressEnd(asset),
       onLongPressCancel: () => _onVideoLongPressCancel(asset),

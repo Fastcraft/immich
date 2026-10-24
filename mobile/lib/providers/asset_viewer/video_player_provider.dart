@@ -41,12 +41,19 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
   NativeVideoPlayerController? _controller;
   Timer? _bufferingTimer;
   Timer? _seekTimer;
+  Timer? _seekSettleTimer;
+  Duration? _pendingSeekPosition;
+  bool _isSeekingNative = false;
   VideoPlaybackStatus? _holdStatus;
+
+  Duration get effectivePosition => _pendingSeekPosition ?? state.position;
 
   @override
   void dispose() {
     _bufferingTimer?.cancel();
     _seekTimer?.cancel();
+    _seekSettleTimer?.cancel();
+    _pendingSeekPosition = null;
     unawaited(WakelockPlus.disable());
     _controller = null;
 
@@ -112,30 +119,58 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     }
 
     timer.cancel();
+    final target = _pendingSeekPosition ?? state.position;
+    await _executeSeek(target);
+  }
+
+  Future<void> _executeSeek(Duration target) async {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+
+    // NativeVideoPlayerController.seekTo clamps position to videoInfo?.duration ?? 0.
+    // If videoInfo is not ready yet (or duration <= 0), defer until onNativePlaybackReady.
+    if ((controller.videoInfo?.duration ?? 0) <= 0) {
+      return;
+    }
+
+    _isSeekingNative = true;
     try {
-      await _controller?.seekTo(state.position.inMilliseconds);
+      await controller.seekTo(target.inMilliseconds);
     } catch (e) {
       if (e is MissingPluginException) {
         return;
       }
-      _log.warning('Error flushing seek: $e');
+      _log.warning('Error seeking video: $e');
+    } finally {
+      _isSeekingNative = false;
+      if (mounted && !(_seekTimer?.isActive ?? false)) {
+        _seekSettleTimer?.cancel();
+        _seekSettleTimer = Timer(const Duration(seconds: 5), () {
+          if (mounted && !(_seekTimer?.isActive ?? false) && !_isSeekingNative) {
+            _pendingSeekPosition = null;
+          }
+        });
+      }
     }
   }
 
   void seekTo(Duration position) {
-    if (_controller == null || state.position == position) {
+    if (_controller == null) {
       return;
     }
 
-    state = state.copyWith(position: position);
+    _pendingSeekPosition = position;
+    if (state.position != position) {
+      state = state.copyWith(position: position);
+    }
 
+    _seekSettleTimer?.cancel();
     _seekTimer?.cancel();
-    _seekTimer = Timer(const Duration(milliseconds: 300), () async {
-      try {
-        await _controller?.seekTo(state.position.inMilliseconds);
-      } catch (e) {
-        _log.warning('Error seeking video: $e');
-      }
+    _seekTimer = Timer(const Duration(milliseconds: 350), () async {
+      final target = _pendingSeekPosition ?? state.position;
+      await _executeSeek(target);
     });
   }
 
@@ -195,15 +230,26 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     }
   }
 
-  void seekRelative(Duration delta) {
-    if (_controller == null || state.duration <= Duration.zero) {
+  void seekRelative(Duration delta, {Duration? fallbackDuration}) {
+    if (_controller == null) {
       return;
     }
 
-    final int durationMs = state.duration.inMilliseconds;
-    // Leave a small 250ms margin before end of stream to prevent decoder crash / EOS channel disconnect
-    final int safeMaxMs = durationMs > 250 ? durationMs - 250 : durationMs;
-    final int targetMs = (state.position + delta).inMilliseconds;
+    final effectiveDuration = state.duration > Duration.zero ? state.duration : (fallbackDuration ?? Duration.zero);
+    if (effectiveDuration <= Duration.zero) {
+      return;
+    }
+
+    if (state.duration <= Duration.zero) {
+      state = state.copyWith(duration: effectiveDuration);
+    }
+
+    final int durationMs = effectiveDuration.inMilliseconds;
+    // Leave a safe margin before end of stream to prevent decoder crash or immediate loop restart
+    final int marginMs = durationMs >= 10000 ? 1000 : 250;
+    final int safeMaxMs = durationMs > marginMs ? durationMs - marginMs : durationMs;
+    final Duration basePosition = _pendingSeekPosition ?? state.position;
+    final int targetMs = (basePosition + delta).inMilliseconds;
     final int clampedMs = targetMs.clamp(0, safeMaxMs);
     seekTo(Duration(milliseconds: clampedMs));
   }
@@ -239,15 +285,22 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
       _bufferingTimer?.cancel();
     }
 
+    final pendingTarget = _pendingSeekPosition;
+    final hasActiveSeek = (_seekTimer?.isActive ?? false) || _isSeekingNative || (_seekSettleTimer?.isActive ?? false);
+
     state = state.copyWith(
-      position: Duration(milliseconds: playbackInfo.position),
-      duration: Duration(milliseconds: videoInfo.duration),
+      position: pendingTarget ?? Duration(milliseconds: playbackInfo.position),
+      duration: videoInfo.duration > 0 ? Duration(milliseconds: videoInfo.duration) : state.duration,
       status: status,
     );
+
+    if (pendingTarget != null && !hasActiveSeek && videoInfo.duration > 0) {
+      unawaited(_executeSeek(pendingTarget));
+    }
   }
 
   void onNativePositionChanged() {
-    if (!mounted || (_seekTimer?.isActive ?? false)) {
+    if (!mounted || (_seekTimer?.isActive ?? false) || _isSeekingNative) {
       return;
     }
 
@@ -257,6 +310,17 @@ class VideoPlayerNotifier extends StateNotifier<VideoPlayerState> {
     }
 
     final position = Duration(milliseconds: playbackInfo.position);
+    final pendingTarget = _pendingSeekPosition;
+    if (pendingTarget != null) {
+      // Ignore stale pre-seek position updates from the native 8ms timer until the player
+      // actually catches up to the target seek position (or the settle timer expires).
+      if ((position - pendingTarget).abs() > const Duration(milliseconds: 2500)) {
+        return;
+      }
+      _seekSettleTimer?.cancel();
+      _pendingSeekPosition = null;
+    }
+
     if (state.position == position) {
       return;
     }

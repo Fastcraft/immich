@@ -6,6 +6,18 @@ enum SkipDirection { rewind, forward }
 
 class VideoPlaybackFeedbackController {
   void Function(SkipDirection direction, {int? seconds})? _onSkip;
+  ValueChanged<bool>? onActiveChanged;
+  bool _isActive = false;
+
+  bool get isActive => _isActive;
+
+  void _setActive(bool active) {
+    if (_isActive == active) {
+      return;
+    }
+    _isActive = active;
+    onActiveChanged?.call(active);
+  }
 
   void triggerSkip(SkipDirection direction, {int? seconds}) {
     _onSkip?.call(direction, seconds: seconds);
@@ -93,6 +105,7 @@ class _VideoPlaybackFeedbackState extends State<VideoPlaybackFeedback>
   void dispose() {
     _dismissTimer?.cancel();
     _animController.dispose();
+    widget.controller?._setActive(false);
     widget.controller?._onSkip = null;
     super.dispose();
   }
@@ -109,16 +122,18 @@ class _VideoPlaybackFeedbackState extends State<VideoPlaybackFeedback>
         _accumulatedSeconds = step;
       }
     });
+    widget.controller?._setActive(true);
 
     _animController.forward(from: 0.0);
 
-    _dismissTimer = Timer(const Duration(milliseconds: 700), () {
+    _dismissTimer = Timer(const Duration(milliseconds: 750), () {
       if (mounted) {
         setState(() {
           _currentDirection = null;
           _accumulatedSeconds = 0;
         });
       }
+      widget.controller?._setActive(false);
     });
   }
 
