@@ -64,7 +64,8 @@ class TimelineFactory {
 
   TimelineService recentlyAdded(String userId) => TimelineService(_timelineRepository.recentlyAdded(userId, groupBy));
 
-  TimelineService favorite(String userId) => TimelineService(_timelineRepository.favorite(userId, groupBy));
+  TimelineService favorite(String userId, {SortAssetsBy sortBy = SortAssetsBy.taken}) =>
+      TimelineService(_timelineRepository.favorite(userId, groupBy, sortBy: sortBy));
 
   TimelineService trash(String userId) => TimelineService(_timelineRepository.trash(userId, groupBy));
 

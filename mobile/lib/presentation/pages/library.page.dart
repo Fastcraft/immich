@@ -61,9 +61,9 @@ class _ActionButtonGrid extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 _ActionButton(
-                  icon: Icons.archive_outlined,
-                  onTap: () => context.pushRoute(const ArchiveRoute()),
-                  label: context.t.archived,
+                  icon: Icons.history_rounded,
+                  onTap: () => context.pushRoute(const RecentlyAddedRoute()),
+                  label: context.t.recently_added,
                 ),
               ],
             ),
@@ -71,20 +71,32 @@ class _ActionButtonGrid extends ConsumerWidget {
             Row(
               children: [
                 _ActionButton(
+                  icon: Icons.archive_outlined,
+                  onTap: () => context.pushRoute(const ArchiveRoute()),
+                  label: context.t.archived,
+                ),
+                const SizedBox(width: 8),
+                _ActionButton(
                   icon: Icons.link_outlined,
                   onTap: () => context.pushRoute(const SharedLinkRoute()),
                   label: context.t.shared_links,
                 ),
-                isTrashEnable ? const SizedBox(width: 8) : const SizedBox.shrink(),
-                isTrashEnable
-                    ? _ActionButton(
-                        icon: Icons.delete_outline_rounded,
-                        onTap: () => context.pushRoute(const TrashRoute()),
-                        label: context.t.trash,
-                      )
-                    : const SizedBox.shrink(),
               ],
             ),
+            if (isTrashEnable) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _ActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    onTap: () => context.pushRoute(const TrashRoute()),
+                    label: context.t.trash,
+                  ),
+                  const SizedBox(width: 8),
+                  const Spacer(),
+                ],
+              ),
+            ],
           ],
         ),
       ),

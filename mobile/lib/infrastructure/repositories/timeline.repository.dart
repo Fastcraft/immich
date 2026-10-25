@@ -380,7 +380,11 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
     sortBy: SortAssetsBy.uploaded,
   );
 
-  TimelineQuery favorite(String userId, GroupAssetsBy groupBy) => _remoteQueryBuilder(
+  TimelineQuery favorite(
+    String userId,
+    GroupAssetsBy groupBy, {
+    SortAssetsBy sortBy = SortAssetsBy.taken,
+  }) => _remoteQueryBuilder(
     filter: (row) =>
         row.deletedAt.isNull() &
         row.isFavorite.equals(true) &
@@ -388,6 +392,7 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
         (row.visibility.equalsValue(AssetVisibility.timeline) | row.visibility.equalsValue(AssetVisibility.archive)),
     groupBy: groupBy,
     origin: TimelineOrigin.favorite,
+    sortBy: sortBy,
   );
 
   TimelineQuery trash(String userId, GroupAssetsBy groupBy) => _remoteQueryBuilder(

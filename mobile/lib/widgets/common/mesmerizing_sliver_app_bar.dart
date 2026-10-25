@@ -10,9 +10,18 @@ import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/timeline/multiselect.provider.dart';
 
 class MesmerizingSliverAppBar extends ConsumerStatefulWidget {
-  const MesmerizingSliverAppBar({super.key, required this.title});
+  const MesmerizingSliverAppBar({
+    super.key,
+    required this.title,
+    this.actions,
+    this.actionsBuilder,
+  });
 
   final String title;
+  final List<Widget>? actions;
+  final List<Widget> Function(BuildContext context, Color? actionIconColor, List<Shadow> actionIconShadows)?
+      actionsBuilder;
+
   @override
   ConsumerState<MesmerizingSliverAppBar> createState() => _MesmerizingSliverAppBarState();
 }
@@ -37,6 +46,14 @@ class _MesmerizingSliverAppBarState extends ConsumerState<MesmerizingSliverAppBa
   Widget build(BuildContext context) {
     final isMultiSelectEnabled = ref.watch(multiSelectProvider.select((s) => s.isEnabled));
 
+    final Color? actionIconColor = Color.lerp(Colors.white, context.primaryColor, _scrollProgress);
+    final List<Shadow> actionIconShadows = [
+      if (_scrollProgress < 0.95)
+        Shadow(offset: const Offset(0, 2), blurRadius: 5, color: Colors.black.withValues(alpha: 0.5))
+      else
+        const Shadow(offset: Offset(0, 2), blurRadius: 0, color: Colors.transparent),
+    ];
+
     return isMultiSelectEnabled
         ? SliverToBoxAdapter(
             child: switch (_scrollProgress) {
@@ -53,17 +70,16 @@ class _MesmerizingSliverAppBarState extends ConsumerState<MesmerizingSliverAppBa
             leading: IconButton(
               icon: Icon(
                 Platform.isIOS ? Icons.arrow_back_ios_new_rounded : Icons.arrow_back,
-                color: Color.lerp(Colors.white, context.primaryColor, _scrollProgress),
-                shadows: [
-                  _scrollProgress < 0.95
-                      ? Shadow(offset: const Offset(0, 2), blurRadius: 5, color: Colors.black.withValues(alpha: 0.5))
-                      : const Shadow(offset: Offset(0, 2), blurRadius: 0, color: Colors.transparent),
-                ],
+                color: actionIconColor,
+                shadows: actionIconShadows,
               ),
               onPressed: () {
                 context.pop();
               },
             ),
+            actions: widget.actionsBuilder != null
+                ? widget.actionsBuilder!(context, actionIconColor, actionIconShadows)
+                : widget.actions,
             flexibleSpace: Builder(
               builder: (context) {
                 final settings = context.dependOnInheritedWidgetOfExactType<FlexibleSpaceBarSettings>();
