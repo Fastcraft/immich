@@ -312,9 +312,7 @@ class _AssetViewerState extends ConsumerState<AssetViewer> {
                   controller: _pageController,
                   physics: isZoomed
                       ? const NeverScrollableScrollPhysics()
-                      : CurrentPlatform.isIOS
-                      ? const FastScrollPhysics()
-                      : const FastClampingScrollPhysics(),
+                      : const FastScrollPhysics(),
                   itemCount: _totalAssets,
                   itemBuilder: (context, index) =>
                       AssetPage(index: index, heroOffset: _heroOffset, onTapNavigate: _onTapNavigate),

@@ -84,6 +84,9 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     };
     _eventSubscription = EventStream.shared.listen(_onEvent);
     _asset = ref.read(timelineServiceProvider).getAssetSafe(widget.index);
+    if (_asset == null) {
+      unawaited(_loadAssetAsync());
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) {
         return;
@@ -100,6 +103,16 @@ class _AssetPageState extends ConsumerState<AssetPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.index != widget.index) {
       _asset = ref.read(timelineServiceProvider).getAssetSafe(widget.index);
+      if (_asset == null) {
+        unawaited(_loadAssetAsync());
+      }
+    }
+  }
+
+  Future<void> _loadAssetAsync() async {
+    final asset = await ref.read(timelineServiceProvider).getAssetAsync(widget.index);
+    if (mounted && asset != null && _asset != asset) {
+      setState(() => _asset = asset);
     }
   }
 
@@ -125,6 +138,8 @@ class _AssetPageState extends ConsumerState<AssetPage> {
           _isZoomed = false;
           _viewer.setZoomed(false);
           setState(() => _asset = asset);
+        } else if (_asset == null) {
+          unawaited(_loadAssetAsync());
         }
       default:
     }
@@ -562,7 +577,18 @@ class _AssetPageState extends ConsumerState<AssetPage> {
         asset: asset,
         localFilePath: localFilePath,
         isCurrent: isCurrent,
-        image: Image(image: imageProvider, fit: BoxFit.contain, alignment: Alignment.center),
+        image: Stack(
+          fit: StackFit.expand,
+          children: [
+            Thumbnail.fromAsset(asset: asset, fit: BoxFit.contain),
+            Image(
+              image: imageProvider,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -584,6 +610,7 @@ class _AssetPageState extends ConsumerState<AssetPage> {
 
     final asset = _asset;
     if (asset == null) {
+      unawaited(_loadAssetAsync());
       return const Center(child: ImmichLoadingIndicator());
     }
 
