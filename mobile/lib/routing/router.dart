@@ -63,6 +63,7 @@ import 'package:immich_mobile/presentation/pages/place.page.dart';
 import 'package:immich_mobile/presentation/pages/place_detail.page.dart';
 import 'package:immich_mobile/presentation/pages/profile/profile_picture_crop.page.dart';
 import 'package:immich_mobile/presentation/pages/recently_added.page.dart';
+import 'package:immich_mobile/presentation/pages/recently_added_favorites.page.dart';
 import 'package:immich_mobile/presentation/pages/recently_taken.page.dart';
 import 'package:immich_mobile/presentation/pages/remote_album.page.dart';
 import 'package:immich_mobile/presentation/pages/search/search.page.dart';
@@ -172,6 +173,7 @@ class AppRouter extends RootStackRouter {
     AutoRoute(page: PartnerDetailRoute.page, guards: [_authGuard, _duplicateGuard]),
     AutoRoute(page: RecentlyTakenRoute.page, guards: [_authGuard, _duplicateGuard]),
     AutoRoute(page: RecentlyAddedRoute.page, guards: [_authGuard, _duplicateGuard]),
+    AutoRoute(page: RecentlyAddedFavoritesRoute.page, guards: [_authGuard, _duplicateGuard]),
     AutoRoute(page: LocalAlbumsRoute.page, guards: [_authGuard, _duplicateGuard]),
     AutoRoute(page: CreateAlbumRoute.page, guards: [_authGuard, _duplicateGuard]),
     AutoRoute(page: PlaceRoute.page, guards: [_authGuard, _duplicateGuard]),

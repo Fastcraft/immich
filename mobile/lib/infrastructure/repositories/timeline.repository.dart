@@ -389,7 +389,8 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
         row.deletedAt.isNull() &
         row.isFavorite.equals(true) &
         row.ownerId.equals(userId) &
-        (row.visibility.equalsValue(AssetVisibility.timeline) | row.visibility.equalsValue(AssetVisibility.archive)),
+        (row.visibility.equalsValue(AssetVisibility.timeline) | row.visibility.equalsValue(AssetVisibility.archive)) &
+        (sortBy == SortAssetsBy.uploaded ? row.uploadedAt.isNotNull() : const Constant(true)),
     groupBy: groupBy,
     origin: TimelineOrigin.favorite,
     sortBy: sortBy,
@@ -753,7 +754,9 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
         ..where(filter(_db.remoteAssetEntity))
         ..orderBy([
           OrderingTerm.desc(
-            sortBy == SortAssetsBy.uploaded ? _db.remoteAssetEntity.uploadedAt : _db.remoteAssetEntity.createdAt,
+            sortBy == SortAssetsBy.uploaded
+                ? coalesce([_db.remoteAssetEntity.uploadedAt, _db.remoteAssetEntity.createdAt])
+                : coalesce([_db.remoteAssetEntity.localDateTime, _db.remoteAssetEntity.createdAt]),
           ),
         ])
         ..limit(count, offset: offset);
@@ -764,7 +767,13 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
     } else {
       final query = _db.remoteAssetEntity.select()
         ..where(filter)
-        ..orderBy([(row) => OrderingTerm.desc(sortBy == SortAssetsBy.uploaded ? row.uploadedAt : row.createdAt)])
+        ..orderBy([
+          (row) => OrderingTerm.desc(
+            sortBy == SortAssetsBy.uploaded
+                ? coalesce([row.uploadedAt, row.createdAt])
+                : coalesce([row.localDateTime, row.createdAt]),
+          ),
+        ])
         ..limit(count, offset: offset);
 
       return query.map((row) => row.toDto()).get();
@@ -799,7 +808,7 @@ extension on Expression<DateTime> {
 extension on $RemoteAssetEntityTable {
   Expression<String> effectiveCreatedAt(GroupAssetsBy groupBy, {SortAssetsBy sortBy = SortAssetsBy.taken}) {
     if (sortBy == SortAssetsBy.uploaded) {
-      return uploadedAt.dateFmt(groupBy, toLocal: true);
+      return coalesce([uploadedAt.dateFmt(groupBy, toLocal: true), createdAt.dateFmt(groupBy, toLocal: true)]);
     }
 
     return coalesce([localDateTime.dateFmt(groupBy), createdAt.dateFmt(groupBy, toLocal: true)]);

@@ -62,8 +62,8 @@ class _ActionButtonGrid extends ConsumerWidget {
                 const SizedBox(width: 8),
                 _ActionButton(
                   icon: Icons.history_rounded,
-                  onTap: () => context.pushRoute(const RecentlyAddedRoute()),
-                  label: context.t.recently_added,
+                  onTap: () => context.pushRoute(const RecentlyAddedFavoritesRoute()),
+                  label: '${context.t.favorites} (${context.t.recently_added})',
                 ),
               ],
             ),
@@ -71,32 +71,39 @@ class _ActionButtonGrid extends ConsumerWidget {
             Row(
               children: [
                 _ActionButton(
+                  icon: Icons.schedule_outlined,
+                  onTap: () => context.pushRoute(const RecentlyAddedRoute()),
+                  label: context.t.recently_added,
+                ),
+                const SizedBox(width: 8),
+                _ActionButton(
                   icon: Icons.archive_outlined,
                   onTap: () => context.pushRoute(const ArchiveRoute()),
                   label: context.t.archived,
                 ),
-                const SizedBox(width: 8),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
                 _ActionButton(
                   icon: Icons.link_outlined,
                   onTap: () => context.pushRoute(const SharedLinkRoute()),
                   label: context.t.shared_links,
                 ),
-              ],
-            ),
-            if (isTrashEnable) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
+                if (isTrashEnable) ...[
+                  const SizedBox(width: 8),
                   _ActionButton(
                     icon: Icons.delete_outline_rounded,
                     onTap: () => context.pushRoute(const TrashRoute()),
                     label: context.t.trash,
                   ),
+                ] else ...[
                   const SizedBox(width: 8),
                   const Spacer(),
                 ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
@@ -118,11 +125,16 @@ class _ActionButton extends StatelessWidget {
         onPressed: onTap,
         label: Padding(
           padding: const EdgeInsets.only(left: 4.0),
-          child: Text(label, style: TextStyle(color: context.colorScheme.onSurface, fontSize: 15)),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: context.colorScheme.onSurface, fontSize: 13.5),
+          ),
         ),
         style: FilledButton.styleFrom(
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           backgroundColor: context.colorScheme.surfaceContainerLow,
           alignment: Alignment.centerLeft,
           shape: RoundedRectangleBorder(

@@ -10,17 +10,21 @@ import 'package:immich_mobile/providers/infrastructure/timeline.provider.dart';
 import 'package:immich_mobile/providers/user.provider.dart';
 import 'package:immich_mobile/widgets/common/mesmerizing_sliver_app_bar.dart';
 
-final favoriteSortByProvider = StateProvider<SortAssetsBy>((ref) => SortAssetsBy.taken);
-
 @RoutePage()
-class FavoritePage extends ConsumerWidget {
+class FavoritePage extends ConsumerStatefulWidget {
   const FavoritePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sortBy = ref.watch(favoriteSortByProvider);
+  ConsumerState<FavoritePage> createState() => _FavoritePageState();
+}
 
+class _FavoritePageState extends ConsumerState<FavoritePage> {
+  SortAssetsBy _sortBy = SortAssetsBy.taken;
+
+  @override
+  Widget build(BuildContext context) {
     return ProviderScope(
+      key: ValueKey('favorite_timeline_${_sortBy.name}'),
       overrides: [
         timelineServiceProvider.overrideWith((ref) {
           final user = ref.watch(currentUserProvider);
@@ -28,25 +32,31 @@ class FavoritePage extends ConsumerWidget {
             throw Exception('User must be logged in to access favorite');
           }
 
-          final timelineService = ref.watch(timelineFactoryProvider).favorite(user.id, sortBy: sortBy);
+          final timelineService = ref.watch(timelineFactoryProvider).favorite(user.id, sortBy: _sortBy);
           ref.onDispose(timelineService.dispose);
           return timelineService;
         }),
       ],
       child: Timeline(
         appBar: MesmerizingSliverAppBar(
-          title: context.t.favorites,
+          title: _sortBy == SortAssetsBy.uploaded
+              ? '${context.t.favorites} (${context.t.recently_added})'
+              : context.t.favorites,
           actionsBuilder: (context, actionIconColor, actionIconShadows) => [
             PopupMenuButton<SortAssetsBy>(
               icon: Icon(
-                sortBy == SortAssetsBy.uploaded ? Icons.history_rounded : Icons.swap_vert_rounded,
+                _sortBy == SortAssetsBy.uploaded ? Icons.history_rounded : Icons.swap_vert_rounded,
                 color: actionIconColor,
                 shadows: actionIconShadows,
               ),
               tooltip: context.t.sort_recent,
-              initialValue: sortBy,
+              initialValue: _sortBy,
               onSelected: (SortAssetsBy value) {
-                ref.read(favoriteSortByProvider.notifier).state = value;
+                if (_sortBy != value) {
+                  setState(() {
+                    _sortBy = value;
+                  });
+                }
               },
               itemBuilder: (context) => [
                 PopupMenuItem(
@@ -56,17 +66,17 @@ class FavoritePage extends ConsumerWidget {
                       Icon(
                         Icons.calendar_today_outlined,
                         size: 20,
-                        color: sortBy == SortAssetsBy.taken ? context.primaryColor : null,
+                        color: _sortBy == SortAssetsBy.taken ? context.primaryColor : null,
                       ),
                       const SizedBox(width: 12),
                       Text(
                         context.t.sort_created,
                         style: TextStyle(
-                          fontWeight: sortBy == SortAssetsBy.taken ? FontWeight.bold : FontWeight.normal,
-                          color: sortBy == SortAssetsBy.taken ? context.primaryColor : null,
+                          fontWeight: _sortBy == SortAssetsBy.taken ? FontWeight.bold : FontWeight.normal,
+                          color: _sortBy == SortAssetsBy.taken ? context.primaryColor : null,
                         ),
                       ),
-                      if (sortBy == SortAssetsBy.taken) ...[
+                      if (_sortBy == SortAssetsBy.taken) ...[
                         const Spacer(),
                         Icon(Icons.check, size: 20, color: context.primaryColor),
                       ],
@@ -80,17 +90,17 @@ class FavoritePage extends ConsumerWidget {
                       Icon(
                         Icons.history_rounded,
                         size: 20,
-                        color: sortBy == SortAssetsBy.uploaded ? context.primaryColor : null,
+                        color: _sortBy == SortAssetsBy.uploaded ? context.primaryColor : null,
                       ),
                       const SizedBox(width: 12),
                       Text(
                         context.t.recently_added,
                         style: TextStyle(
-                          fontWeight: sortBy == SortAssetsBy.uploaded ? FontWeight.bold : FontWeight.normal,
-                          color: sortBy == SortAssetsBy.uploaded ? context.primaryColor : null,
+                          fontWeight: _sortBy == SortAssetsBy.uploaded ? FontWeight.bold : FontWeight.normal,
+                          color: _sortBy == SortAssetsBy.uploaded ? context.primaryColor : null,
                         ),
                       ),
-                      if (sortBy == SortAssetsBy.uploaded) ...[
+                      if (_sortBy == SortAssetsBy.uploaded) ...[
                         const Spacer(),
                         Icon(Icons.check, size: 20, color: context.primaryColor),
                       ],
