@@ -38,7 +38,12 @@ class ShareHandlerRepository {
           ? ShareIntentAttachmentType.image
           : ShareIntentAttachmentType.video;
 
-      final fileLength = File(attachment.path).lengthSync();
+      int fileLength = 0;
+      try {
+        fileLength = File(attachment.path).lengthSync();
+      } catch (_) {
+        fileLength = 0;
+      }
 
       payload.add(
         ShareIntentAttachment(
