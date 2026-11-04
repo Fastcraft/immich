@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -10,20 +11,29 @@ class ShareHandlerRepository {
   ShareHandlerRepository();
 
   void Function(List<ShareIntentAttachment> attachments)? onSharedMedia;
+  StreamSubscription<SharedMedia>? _subscription;
 
   Future<void> init() async {
     final handler = ShareHandlerPlatform.instance;
-    final media = await handler.getInitialSharedMedia();
 
-    if (media != null && media.attachments != null) {
-      onSharedMedia?.call(_buildPayload(media.attachments!));
-    }
-
-    handler.sharedMediaStream.listen((SharedMedia media) {
+    await _subscription?.cancel();
+    _subscription = handler.sharedMediaStream.listen((SharedMedia media) {
       if (media.attachments != null) {
-        onSharedMedia?.call(_buildPayload(media.attachments!));
+        final payload = _buildPayload(media.attachments!);
+        if (payload.isNotEmpty) {
+          onSharedMedia?.call(payload);
+        }
       }
     });
+
+    final media = await handler.getInitialSharedMedia();
+    if (media != null && media.attachments != null) {
+      await handler.resetInitialSharedMedia();
+      final payload = _buildPayload(media.attachments!);
+      if (payload.isNotEmpty) {
+        onSharedMedia?.call(payload);
+      }
+    }
   }
 
   List<ShareIntentAttachment> _buildPayload(List<SharedAttachment?> attachments) {

@@ -169,6 +169,7 @@ class ForegroundUploadService {
     await _executeWithWorkerPool<File>(
       items: files,
       cancelToken: cancelToken,
+      clearCacheBeforeStart: false,
       processItem: (file) async {
         final fileId = p.hash(file.path).toString();
 
@@ -181,6 +182,13 @@ class ForegroundUploadService {
 
         if (result.isSuccess) {
           onSuccess?.call(fileId, result.remoteAssetId!);
+          // Clean up temporary copy if the file was cached from an external content stream
+          if (file.path.contains('${Platform.pathSeparator}share_intent_cache${Platform.pathSeparator}') ||
+              file.path.contains('/share_intent_cache/')) {
+            try {
+              await file.delete();
+            } catch (_) {}
+          }
         } else if (!result.isCancelled && result.errorMessage != null) {
           onError?.call(fileId, result.errorMessage!);
         }
@@ -205,8 +213,11 @@ class ForegroundUploadService {
     required Future<void> Function(T item) processItem,
     bool Function(T item)? shouldSkip,
     int concurrentWorkers = 3,
+    bool clearCacheBeforeStart = true,
   }) async {
-    await _storageRepository.clearCache();
+    if (clearCacheBeforeStart) {
+      await _storageRepository.clearCache();
+    }
     shouldAbortUpload = false;
 
     int currentIndex = 0;

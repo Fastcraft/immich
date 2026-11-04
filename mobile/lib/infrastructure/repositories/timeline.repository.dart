@@ -371,12 +371,12 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
 
   TimelineQuery recentlyAdded(String userId, GroupAssetsBy groupBy) => _remoteQueryBuilder(
     filter: (row) =>
-        row.uploadedAt.isNotNull() &
         row.deletedAt.isNull() &
         row.ownerId.equals(userId) &
         (row.visibility.equalsValue(AssetVisibility.timeline) | row.visibility.equalsValue(AssetVisibility.archive)),
     origin: TimelineOrigin.recentlyAdded,
     groupBy: groupBy,
+    joinLocal: true,
     sortBy: SortAssetsBy.uploaded,
   );
 
@@ -389,10 +389,10 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
         row.deletedAt.isNull() &
         row.isFavorite.equals(true) &
         row.ownerId.equals(userId) &
-        (row.visibility.equalsValue(AssetVisibility.timeline) | row.visibility.equalsValue(AssetVisibility.archive)) &
-        (sortBy == SortAssetsBy.uploaded ? row.uploadedAt.isNotNull() : const Constant(true)),
+        (row.visibility.equalsValue(AssetVisibility.timeline) | row.visibility.equalsValue(AssetVisibility.archive)),
     groupBy: groupBy,
     origin: TimelineOrigin.favorite,
+    joinLocal: true,
     sortBy: sortBy,
   );
 
@@ -426,6 +426,7 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
         row.ownerId.equals(userId),
     origin: TimelineOrigin.video,
     groupBy: groupBy,
+    joinLocal: true,
   );
 
   TimelineQuery place(String place, GroupAssetsBy groupBy) => (
@@ -702,8 +703,14 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
   }) {
     return (
       bucketSource: () => _watchRemoteBucket(filter: filter, groupBy: groupBy, sortBy: sortBy),
-      assetSource: (offset, count) =>
-          _getRemoteAssets(filter: filter, offset: offset, count: count, joinLocal: joinLocal, sortBy: sortBy),
+      assetSource: (offset, count) => _getRemoteAssets(
+        filter: filter,
+        offset: offset,
+        count: count,
+        groupBy: groupBy,
+        joinLocal: joinLocal,
+        sortBy: sortBy,
+      ),
       origin: origin,
     );
   }
@@ -739,9 +746,21 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
     required Expression<bool> Function($RemoteAssetEntityTable row) filter,
     required int offset,
     required int count,
+    GroupAssetsBy groupBy = GroupAssetsBy.day,
     bool joinLocal = false,
     SortAssetsBy sortBy = SortAssetsBy.taken,
   }) {
+    final orderTerms = <OrderingTerm>[
+      if (groupBy != GroupAssetsBy.none)
+        OrderingTerm.desc(_db.remoteAssetEntity.effectiveCreatedAt(groupBy, sortBy: sortBy)),
+      OrderingTerm.desc(
+        sortBy == SortAssetsBy.uploaded
+            ? coalesce([_db.remoteAssetEntity.uploadedAt, _db.remoteAssetEntity.createdAt])
+            : coalesce([_db.remoteAssetEntity.localDateTime, _db.remoteAssetEntity.createdAt]),
+      ),
+      OrderingTerm.desc(_db.remoteAssetEntity.id),
+    ];
+
     if (joinLocal) {
       final localId = subqueryExpression<String>(
         _db.localAssetEntity.selectOnly()
@@ -752,13 +771,7 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
 
       final query = _db.remoteAssetEntity.select().addColumns([localId]).join(const [])
         ..where(filter(_db.remoteAssetEntity))
-        ..orderBy([
-          OrderingTerm.desc(
-            sortBy == SortAssetsBy.uploaded
-                ? coalesce([_db.remoteAssetEntity.uploadedAt, _db.remoteAssetEntity.createdAt])
-                : coalesce([_db.remoteAssetEntity.localDateTime, _db.remoteAssetEntity.createdAt]),
-          ),
-        ])
+        ..orderBy(orderTerms)
         ..limit(count, offset: offset);
 
       return query
@@ -767,13 +780,7 @@ class TimelineRepository extends DatabaseAccessor<Drift> with $TimelineRepositor
     } else {
       final query = _db.remoteAssetEntity.select()
         ..where(filter)
-        ..orderBy([
-          (row) => OrderingTerm.desc(
-            sortBy == SortAssetsBy.uploaded
-                ? coalesce([row.uploadedAt, row.createdAt])
-                : coalesce([row.localDateTime, row.createdAt]),
-          ),
-        ])
+        ..orderBy([(_) => orderTerms.first, ...orderTerms.skip(1).map((term) => (_) => term)])
         ..limit(count, offset: offset);
 
       return query.map((row) => row.toDto()).get();

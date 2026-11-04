@@ -327,7 +327,7 @@ class _ShareIntentPageState extends ConsumerState<ShareIntentPage> {
               SizedBox(
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: (isUploading || isUploaded) ? null : upload,
+                  onPressed: (isUploading || isUploaded || candidates.isEmpty) ? null : upload,
                   child: (isUploading || isUploaded) ? UploadingText(candidates: candidates) : Text(context.t.upload),
                 ),
               ),

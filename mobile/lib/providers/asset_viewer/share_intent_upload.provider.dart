@@ -31,6 +31,9 @@ class ShareIntentUploadStateNotifier extends StateNotifier<List<ShareIntentAttac
   }
 
   void onSharedMedia(List<ShareIntentAttachment> attachments) {
+    if (attachments.isEmpty) {
+      return;
+    }
     router.removeWhere((route) => route.name == "ShareIntentRoute");
     clearAttachments();
     addAttachments(attachments);

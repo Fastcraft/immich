@@ -20,13 +20,14 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 
 private const val TAG = "ShareHandlerPlugin"
 private const val kEventsChannel = "com.shoutsocial.share_handler/sharedMediaStream"
@@ -34,7 +35,12 @@ private const val kEventsChannel = "com.shoutsocial.share_handler/sharedMediaStr
 /** ShareHandlerPlugin */
 class ShareHandlerPlugin : FlutterPlugin, Messages.ShareHandlerApi, EventChannel.StreamHandler, ActivityAware,
   PluginRegistry.NewIntentListener {
+  @Volatile
   private var initialMedia: Messages.SharedMedia? = null
+  @Volatile
+  private var initialMediaJob: Deferred<Messages.SharedMedia?>? = null
+  @Volatile
+  private var pendingStreamMedia: Messages.SharedMedia? = null
   private var eventChannel: EventChannel? = null
   private var eventSink: EventChannel.EventSink? = null
 
@@ -58,7 +64,22 @@ class ShareHandlerPlugin : FlutterPlugin, Messages.ShareHandlerApi, EventChannel
   }
 
   override fun getInitialSharedMedia(result: Messages.Result<Messages.SharedMedia>?) {
-    result?.success(initialMedia)
+    val job = initialMediaJob
+    if (job != null) {
+      pluginScope.launch {
+        val media = try {
+          job.await()
+        } catch (e: Exception) {
+          Log.e(TAG, "Error awaiting initial shared media", e)
+          null
+        }
+        withContext(Dispatchers.Main) {
+          result?.success(media)
+        }
+      }
+    } else {
+      result?.success(initialMedia)
+    }
   }
 
   override fun recordSentMessage(media: Messages.SharedMedia) {
@@ -96,10 +117,16 @@ class ShareHandlerPlugin : FlutterPlugin, Messages.ShareHandlerApi, EventChannel
 
   override fun resetInitialSharedMedia() {
     initialMedia = null
+    initialMediaJob = null
   }
 
   override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
     eventSink = events
+    val pending = pendingStreamMedia
+    if (pending != null && events != null) {
+      pendingStreamMedia = null
+      events.success(pending.toMap())
+    }
   }
 
   override fun onCancel(arguments: Any?) {
@@ -140,12 +167,28 @@ class ShareHandlerPlugin : FlutterPlugin, Messages.ShareHandlerApi, EventChannel
       return
     }
 
-    pluginScope.launch {
+    // Snapshot intent payload and mark intent consumed so config changes do not re-trigger
+    val singleUri = if (action == Intent.ACTION_SEND) {
+      intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+    } else null
+    val multipleUris = if (action == Intent.ACTION_SEND_MULTIPLE) {
+      intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+    } else null
+    val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+    val conversationIdentifier = intent.getStringExtra("android.intent.extra.shortcut.ID")
+      ?: intent.getStringExtra("conversationIdentifier")
+
+    intent.action = null
+    intent.removeExtra(Intent.EXTRA_STREAM)
+    intent.removeExtra(Intent.EXTRA_TEXT)
+
+    val deferred = pluginScope.async {
       try {
-        val attachments = attachmentsFromIntent(intent)
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
-        val conversationIdentifier = intent.getStringExtra("android.intent.extra.shortcut.ID")
-          ?: intent.getStringExtra("conversationIdentifier")
+        val attachments = when (action) {
+          Intent.ACTION_SEND -> singleUri?.let { uri -> attachmentForUri(uri)?.let { listOf(it) } }
+          Intent.ACTION_SEND_MULTIPLE -> multipleUris?.mapNotNull { uri -> attachmentForUri(uri) }?.takeIf { it.isNotEmpty() }
+          else -> null
+        }
 
         if (attachments != null || text != null || conversationIdentifier != null) {
           val mediaBuilder = Messages.SharedMedia.Builder()
@@ -155,40 +198,29 @@ class ShareHandlerPlugin : FlutterPlugin, Messages.ShareHandlerApi, EventChannel
           val media = mediaBuilder.build()
 
           if (initial) {
-            synchronized(this@ShareHandlerPlugin) {
-              initialMedia = media
+            initialMedia = media
+          } else {
+            withContext(Dispatchers.Main) {
+              val sink = eventSink
+              if (sink != null) {
+                sink.success(media.toMap())
+              } else {
+                pendingStreamMedia = media
+              }
             }
           }
-
-          withContext(Dispatchers.Main) {
-            if (eventSink != null) {
-              eventSink?.success(media.toMap())
-            } else {
-              Log.i(TAG, "EventSink not yet available, media preserved in initialMedia")
-            }
-          }
+          media
+        } else {
+          null
         }
       } catch (e: Exception) {
         Log.e(TAG, "Error processing share intent", e)
+        null
       }
     }
-  }
 
-  private fun attachmentsFromIntent(intent: Intent?): List<Messages.SharedAttachment>? {
-    if (intent == null) return null
-    return when (intent.action) {
-      Intent.ACTION_SEND -> {
-        val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return null
-        val attachment = attachmentForUri(uri)
-        if (attachment != null) listOf(attachment) else null
-      }
-
-      Intent.ACTION_SEND_MULTIPLE -> {
-        val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
-        uris?.mapNotNull { uri -> attachmentForUri(uri) }?.toList()
-      }
-
-      else -> null
+    if (initial) {
+      initialMediaJob = deferred
     }
   }
 

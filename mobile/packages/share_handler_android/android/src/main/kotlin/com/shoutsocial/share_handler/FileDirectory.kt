@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
@@ -15,6 +16,8 @@ import java.io.FileOutputStream
 import java.util.Date
 
 private const val TAG = "FileDirectory"
+private const val SHARE_CACHE_DIR = "share_intent_cache"
+private const val CACHE_MAX_AGE_MS = 24L * 60L * 60L * 1000L // 24 hours
 
 object FileDirectory {
 
@@ -40,20 +43,29 @@ object FileDirectory {
                     val split = docId.split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
                     val type = split[0]
 
-                    if ("primary".equals(type, ignoreCase = true)) {
-                        val path = context.getExternalFilesDir(null)?.toString() + "/" + split[1]
-                        if (File(path).canRead()) return path
+                    if ("primary".equals(type, ignoreCase = true) && split.size > 1) {
+                        val primaryPath = "${Environment.getExternalStorageDirectory()}/${split[1]}"
+                        if (File(primaryPath).canRead()) return primaryPath
+                        val appExtPath = "${context.getExternalFilesDir(null)}/${split[1]}"
+                        if (File(appExtPath).canRead()) return appExtPath
                     }
                     val path = getDataColumn(context, uri, null, null)
                     if (path != null) return path
                 } else if (isDownloadsDocument(uri)) {
                     try {
                         val id = DocumentsContract.getDocumentId(uri)
-                        val contentUri = ContentUris.withAppendedId(
-                            Uri.parse("content://downloads/public_downloads"), java.lang.Long.valueOf(id)
-                        )
-                        val path = getDataColumn(context, contentUri, null, null)
-                        if (path != null) return path
+                        if (id.startsWith("raw:")) {
+                            val rawPath = id.removePrefix("raw:")
+                            if (File(rawPath).canRead()) return rawPath
+                        }
+                        val numericId = id.substringAfter(':', id).toLongOrNull()
+                        if (numericId != null) {
+                            val contentUri = ContentUris.withAppendedId(
+                                Uri.parse("content://downloads/public_downloads"), numericId
+                            )
+                            val path = getDataColumn(context, contentUri, null, null)
+                            if (path != null) return path
+                        }
                     } catch (_: Exception) {
                         val path = getDataColumn(context, uri, null, null)
                         if (path != null) return path
@@ -67,7 +79,7 @@ object FileDirectory {
                         "image" -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI
                         "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                         "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                        else -> null
+                        else -> MediaStore.Files.getContentUri("external")
                     }
 
                     if (contentUri != null && split.size > 1) {
@@ -79,16 +91,13 @@ object FileDirectory {
                 }
             }
 
-            // 3. General Content URI (e.g. content://media/external/video/media/12345 or other apps)
+            // 3. General Content URI (e.g. MediaStore, Photo Picker, Google Photos, Gallery, File Managers)
             if ("content".equals(uri.scheme, ignoreCase = true)) {
-                // Priority 1: Check if the underlying real file can be resolved directly via MediaStore DATA column
+                // Priority 1: Resolve underlying real file path without copying
                 val directPath = tryGetDirectFilePath(context, uri)
                 if (directPath != null) {
-                    val file = File(directPath)
-                    if (file.exists() && file.canRead()) {
-                        Log.i(TAG, "Direct file path resolved without copy: $directPath")
-                        return directPath
-                    }
+                    Log.i(TAG, "Direct file path resolved without copy: $directPath")
+                    return directPath
                 }
 
                 // Priority 2: Fallback to copying content stream into app cache directory
@@ -102,42 +111,157 @@ object FileDirectory {
     }
 
     /**
-     * Attempts to query the real file path (_data column) directly without copying.
+     * Attempts to resolve the real local file path without copying:
+     * 1) Direct _data column on the URI
+     * 2) Embedded content://media/... URI (e.g. Google Photos provider) or MediaStore numeric ID (e.g. Photo Picker)
+     * 3) MediaStore lookup by (DISPLAY_NAME, SIZE)
      */
     private fun tryGetDirectFilePath(context: Context, uri: Uri): String? {
-        val projection = arrayOf(MediaStore.MediaColumns.DATA)
-        return try {
-            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
-                    if (columnIndex != -1) {
-                        cursor.getString(columnIndex)
-                    } else null
-                } else null
-            }
+        // Step 1: Query _data directly on the incoming URI
+        getDataColumn(context, uri, null, null)?.let { return it }
+
+        val mimeType = try {
+            context.contentResolver.getType(uri)
         } catch (_: Exception) {
             null
         }
+        val (displayName, expectedSize) = queryDisplayNameAndSize(context, uri)
+
+        // Step 2a: Check if the URI wraps an embedded content://media/... URI (e.g. Google Photos)
+        try {
+            val decodedUriString = Uri.decode(uri.toString())
+            val mediaPrefixIdx = decodedUriString.indexOf("content://media/")
+            if (mediaPrefixIdx > 0) {
+                val tail = decodedUriString.substring(mediaPrefixIdx)
+                val regex = Regex("""content://media/[a-zA-Z0-9_]+/(?:images|video|audio|file)/media/\d+""")
+                val match = regex.find(tail)
+                if (match != null) {
+                    val embeddedUri = Uri.parse(match.value)
+                    getDataColumn(context, embeddedUri, null, null)?.let { path ->
+                        if (expectedSize <= 0L || File(path).length() == expectedSize) {
+                            return path
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        // Step 2b: Check if the URI has a numeric MediaStore ID (e.g. Android Photo Picker content://media/picker/.../media/<id>)
+        val candidateId = uri.lastPathSegment?.substringAfterLast(':')?.toLongOrNull()
+        if (candidateId != null && candidateId > 0) {
+            val candidateTables = getCandidateMediaTables(mimeType)
+            for (tableUri in candidateTables) {
+                val path = getDataColumn(
+                    context,
+                    tableUri,
+                    "${MediaStore.MediaColumns._ID}=?",
+                    arrayOf(candidateId.toString())
+                )
+                if (path != null) {
+                    val file = File(path)
+                    if (expectedSize > 0L && file.length() == expectedSize) {
+                        return path
+                    } else if (expectedSize <= 0L && "media".equals(uri.authority, ignoreCase = true)) {
+                        return path
+                    }
+                }
+            }
+        }
+
+        // Step 3: Lookup in MediaStore by (DISPLAY_NAME, SIZE)
+        if (!displayName.isNullOrBlank() && expectedSize > 0L) {
+            val candidateTables = getCandidateMediaTables(mimeType)
+            for (tableUri in candidateTables) {
+                try {
+                    context.contentResolver.query(
+                        tableUri,
+                        arrayOf(MediaStore.MediaColumns.DATA),
+                        "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.SIZE}=?",
+                        arrayOf(displayName, expectedSize.toString()),
+                        "${MediaStore.MediaColumns.DATE_MODIFIED} DESC"
+                    )?.use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val colIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                            if (colIdx != -1) {
+                                val path = cursor.getString(colIdx)
+                                if (!path.isNullOrBlank()) {
+                                    val file = File(path)
+                                    if (file.exists() && file.canRead() && file.length() == expectedSize) {
+                                        return path
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
+
+        return null
+    }
+
+    private fun getCandidateMediaTables(mimeType: String?): List<Uri> {
+        return when {
+            mimeType?.startsWith("video/") == true -> listOf(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                MediaStore.Files.getContentUri("external")
+            )
+            mimeType?.startsWith("image/") == true -> listOf(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                MediaStore.Files.getContentUri("external")
+            )
+            mimeType?.startsWith("audio/") == true -> listOf(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                MediaStore.Files.getContentUri("external")
+            )
+            else -> listOf(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                MediaStore.Files.getContentUri("external")
+            )
+        }
+    }
+
+    private fun queryDisplayNameAndSize(context: Context, uri: Uri): Pair<String?, Long> {
+        var displayName: String? = null
+        var size = -1L
+        try {
+            val projection = arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (nameIdx != -1 && !cursor.isNull(nameIdx)) {
+                        displayName = cursor.getString(nameIdx)
+                    }
+                    if (sizeIdx != -1 && !cursor.isNull(sizeIdx)) {
+                        size = cursor.getLong(sizeIdx)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        if (size <= 0L) {
+            try {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    if (pfd.statSize > 0L) {
+                        size = pfd.statSize
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return displayName to size
     }
 
     /**
      * Copy content stream to cache directory if direct access is not possible.
      */
     private fun copyContentUriToCache(context: Context, uri: Uri): String? {
-        var fileName: String? = null
-        try {
-            val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
-            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (nameIdx != -1) {
-                        fileName = cursor.getString(nameIdx)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not determine file name from URI", e)
-        }
+        val (queriedName, uriLength) = queryDisplayNameAndSize(context, uri)
+        var fileName = queriedName?.let { File(it).name }
 
         val mimeType = context.contentResolver.getType(uri)
         if (fileName.isNullOrBlank()) {
@@ -150,35 +274,57 @@ object FileDirectory {
             fileName = "${prefix}_${Date().time}.$ext"
         }
 
-        val targetFile = File(context.cacheDir, fileName)
-
-        // If target file already exists and has the same length, reuse it
-        try {
-            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
-                val uriLength = pfd.statSize
-                if (targetFile.exists() && uriLength > 0 && targetFile.length() == uriLength) {
-                    Log.i(TAG, "Reusing existing cached file: ${targetFile.absolutePath}")
-                    return targetFile.absolutePath
-                }
-            }
-        } catch (_: Exception) {
-            // Ignore descriptor check errors
+        val cacheSubDir = File(context.cacheDir, SHARE_CACHE_DIR)
+        if (!cacheSubDir.exists()) {
+            cacheSubDir.mkdirs()
+        } else {
+            pruneOldCacheFiles(cacheSubDir)
         }
 
+        val targetFile = File(cacheSubDir, fileName)
+
+        // If target file already exists and has the same length, reuse it
+        if (targetFile.exists() && uriLength > 0L && targetFile.length() == uriLength) {
+            Log.i(TAG, "Reusing existing cached file: ${targetFile.absolutePath}")
+            return targetFile.absolutePath
+        }
+
+        val tempFile = File(cacheSubDir, "$fileName.tmp_${System.nanoTime()}")
         try {
             context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(targetFile).use { fileOut ->
-                    val buffer = ByteArray(64 * 1024) // 64KB buffer for efficient transfer
+                FileOutputStream(tempFile).use { fileOut ->
+                    val buffer = ByteArray(256 * 1024) // 256KB buffer for high-throughput transfer
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         fileOut.write(buffer, 0, bytesRead)
                     }
                 }
+            } ?: return null
+
+            if (targetFile.exists()) {
+                targetFile.delete()
             }
-            return targetFile.absolutePath
+            return if (tempFile.renameTo(targetFile)) {
+                targetFile.absolutePath
+            } else {
+                tempFile.absolutePath
+            }
         } catch (e: Exception) {
+            tempFile.delete()
             Log.e(TAG, "Failed to copy content URI to cache: $uri", e)
             return null
+        }
+    }
+
+    private fun pruneOldCacheFiles(dir: File) {
+        try {
+            val cutoff = System.currentTimeMillis() - CACHE_MAX_AGE_MS
+            dir.listFiles()?.forEach { file ->
+                if (file.isFile && file.lastModified() < cutoff) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {
         }
     }
 
